@@ -24,6 +24,10 @@ func (m model) sourcesKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = max(0, m.cursor-1)
 	case "down", "j":
 		m.cursor = max(0, min(len(srcs)-1, m.cursor+1))
+	case "home":
+		m.cursor = 0
+	case "end":
+		m.cursor = max(0, len(srcs)-1)
 	case " ":
 		if len(srcs) > 0 {
 			id := srcs[m.cursor].ID
@@ -53,14 +57,8 @@ func (m model) sourcesKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.screen, m.cursor = screenSettings, 0
 	case "n":
 		m.screen, m.cursor = screenMissing, 0
-	case "c":
-		if m.run.busy {
-			m.log(dim.Render("Wait for the download to finish before changing destination."))
-		} else {
-			root := m.eng.Root()
-			m.eng, m.marked = nil, map[string]bool{}
-			m.openBrowser(root)
-		}
+	case "c", "esc", "backspace":
+		m.changeDestination()
 	}
 	return m, cmd
 }
@@ -81,11 +79,12 @@ func (m model) pickedURLs(srcs []engine.SourceView) []string {
 }
 
 func (m model) sourcesView(b *strings.Builder, w int) {
-	info := fmt.Sprintf(" · %s free · %s · %d jobs", engine.Human(device.Free(m.eng.Root())), m.eng.Format(), m.eng.Jobs())
+	info := fmt.Sprintf(" · %s · %d jobs", m.eng.Format(), m.eng.Jobs())
 	if m.opt.Cookies != "" {
 		info += " · cookies " + m.opt.Cookies
 	}
-	header(b, cutLeft(device.Label(m.eng.Root()), max(20, w-45))+dim.Render(info))
+	b.WriteString(logo.Render("ytmanager") + " " + cutLeft(device.Label(m.eng.Root()), max(10, w-35)) + dim.Render(info) + "\n")
+	b.WriteString(m.spaceView(w) + "\n")
 
 	var rows []string
 	for i, s := range m.eng.Snapshot() {
@@ -97,12 +96,13 @@ func (m model) sourcesView(b *strings.Builder, w int) {
 		if s.Done+s.Unavailable == s.Total {
 			count = ok.Render(count)
 		}
-		tw := max(10, w-26)
 		if s.Unavailable > 0 {
 			count += dim.Render(fmt.Sprintf(" · %d unavail.", s.Unavailable))
-			tw = max(10, tw-14)
 		}
-		rows = append(rows, pick(i == m.cursor, fmt.Sprintf("%s %-9s %-*s %s", mark, tags[s.Type], tw, cut(s.Title, tw), count)))
+		prefix := fmt.Sprintf("%s %-9s ", mark, tags[s.Type])
+		tw := max(1, w-7-ansi.StringWidth(prefix)-ansi.StringWidth(count))
+		title := ansi.Truncate(strings.Join(strings.Fields(s.Title), " "), tw, "…")
+		rows = append(rows, pick(i == m.cursor, prefix+title+strings.Repeat(" ", max(0, tw-ansi.StringWidth(title)))+" "+count))
 		origin := s.URL
 		if s.Creator != "" {
 			origin = "By " + s.Creator
@@ -112,20 +112,35 @@ func (m model) sourcesView(b *strings.Builder, w int) {
 	if len(rows) == 0 {
 		rows = []string{dim.Render("No sources yet. Paste a playlist, album or song link to start downloading.")}
 	}
-	panel(b, w, rows)
+	activity := m.sourceActivity(w)
+	m.listPanel(b, w, rows, m.cursor*2, 2, strings.Count(activity, "\n"))
+	b.WriteString(activity)
+	m.footer(b, m.help())
+}
 
+func (m model) sourceActivity(w int) string {
+	if m.terminalHeight() < 24 {
+		if m.run.busy && (m.terminalHeight() >= 16 || m.prompt == promptNone) {
+			return fmt.Sprintf("  %s %d/%d · %d active\n", m.run.verb, m.run.done, m.run.total, len(m.run.jobs))
+		}
+		return ""
+	}
+	var b strings.Builder
 	if m.run.busy {
-		b.WriteString("\n")
-		for _, id := range m.run.order {
-			j := m.run.jobs[id]
-			b.WriteString(fmt.Sprintf("  %-32s %s\n", cut(j.title, 32), m.bar.ViewAs(j.pct)))
+		limit := 1
+		if m.terminalHeight() >= 32 {
+			limit = 3
+		}
+		for i, id := range m.run.order {
+			if i >= limit {
+				b.WriteString(dim.Render(fmt.Sprintf("  %d more active tracks", len(m.run.order)-limit)) + "\n")
+				break
+			}
+			if j := m.run.jobs[id]; j != nil {
+				b.WriteString(fmt.Sprintf("  %-32s %s\n", cut(j.title, 32), m.bar.ViewAs(j.pct)))
+			}
 		}
 	}
 	b.WriteString("\n" + m.catView(w) + "\n")
-
-	help := "paste a link to download it · a add · space mark · enter sync · d remove · n unavailable · o settings · c change destination · q quit"
-	if m.run.busy {
-		help = "paste a link or a to add more · p pause/resume · x cancel · n unavailable · o settings · q quit"
-	}
-	m.footer(b, help)
+	return b.String()
 }

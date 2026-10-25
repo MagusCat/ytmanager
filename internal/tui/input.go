@@ -16,6 +16,20 @@ func (m model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if k.String() == "q" {
 		return m, tea.Quit
 	}
+	switch k.String() {
+	case "pgup":
+		m.scrollLogs(max(1, m.logHeight()))
+		return m, nil
+	case "pgdown":
+		m.scrollLogs(-max(1, m.logHeight()))
+		return m, nil
+	case "ctrl+home":
+		m.scrollLogs(len(m.logLines()))
+		return m, nil
+	case "ctrl+end":
+		m.logScroll = 0
+		return m, nil
+	}
 	switch m.screen {
 	case screenDevices:
 		return m.devicesKey(k)

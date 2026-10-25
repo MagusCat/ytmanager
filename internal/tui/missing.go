@@ -79,6 +79,6 @@ func (m model) missingView(b *strings.Builder, w int) {
 	if len(rows) == 0 {
 		rows = []string{dim.Render("Everything is available.")}
 	}
-	panel(b, w, scroll(rows, m.cursor, 14))
-	m.footer(b, "↑↓ move · paste or enter: alternative (song, album or playlist) · r retry · esc back")
+	m.listPanel(b, w, rows, m.cursor, 1, 0)
+	m.footer(b, m.help())
 }

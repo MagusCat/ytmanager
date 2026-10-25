@@ -17,6 +17,8 @@ import (
 func (m model) devicesKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch k.String() {
+	case "esc":
+		m.returnToLibrary()
 	case "up", "k":
 		m.cursor = max(0, m.cursor-1)
 	case "down", "j":
@@ -54,13 +56,13 @@ func (m model) devicesView(b *strings.Builder, w int) {
 		rows = append(rows, pick(i == m.cursor, row))
 	}
 	rows = append(rows, pick(m.cursor == len(m.mounts), "Other path…"))
-	panel(b, w, rows)
-	help := "↑↓ move · enter browse folders · e edit path · paste a path · r refresh · q quit · phones are detected automatically"
-	if m.lost != nil {
-		b.WriteString("\n" + m.catView(w) + "\n")
-		help = "x stop waiting · " + help
+	activity := ""
+	if m.lost != nil && m.terminalHeight() >= 24 {
+		activity = "\n" + m.catView(w) + "\n"
 	}
-	m.footer(b, help)
+	m.listPanel(b, w, rows, m.cursor, 1, strings.Count(activity, "\n"))
+	b.WriteString(activity)
+	m.footer(b, m.help())
 }
 
 // Folder browser: row 0 uses the current folder, row 1 goes up, the rest are subfolders.
@@ -88,7 +90,10 @@ func (m *model) openBrowser(p string) {
 			m.dirs = append(m.dirs, e.Name())
 		}
 	}
-	m.screen, m.browse, m.cursor, m.logs = screenBrowse, p, 0, nil
+	m.screen, m.browse, m.cursor = screenBrowse, p, 0
+	if !m.browseReturn {
+		m.logs, m.logScroll = nil, 0
+	}
 }
 
 func (m *model) mkdir(name string) {
@@ -104,6 +109,10 @@ func (m model) browseKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch k.String() {
 	case "esc":
+		if !m.returnToLibrary() {
+			m.screen, m.cursor = screenDevices, 0
+		}
+	case "d":
 		m.screen, m.cursor = screenDevices, 0
 	case "up", "k":
 		m.cursor = max(0, m.cursor-1)
@@ -139,6 +148,6 @@ func (m model) browseView(b *strings.Builder, w int) {
 	if len(m.dirs) == 0 {
 		rows = append(rows, dim.Render("  (no subfolders: n creates one)"))
 	}
-	panel(b, w, scroll(rows, m.cursor, 14))
-	m.footer(b, "↑↓ move · → open · ← up · enter use/open · u use this one · n new folder · e edit path · esc devices")
+	m.listPanel(b, w, rows, m.cursor, 1, 0)
+	m.footer(b, m.help())
 }

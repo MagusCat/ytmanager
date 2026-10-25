@@ -44,21 +44,27 @@ type model struct {
 	eng    *engine.Engine // nil on screenDevices and screenBrowse
 	cursor int
 
-	mounts []device.Mount
-	browse string // folder shown in screenBrowse
-	dirs   []string
+	mounts        []device.Mount
+	browse        string // folder shown in screenBrowse
+	dirs          []string
+	browseReturn  bool
+	libraryCursor int
 
 	input  textinput.Model
 	prompt prompt
 	altFor string // track that receives the alternative being typed
 
-	run    run
-	lost   *lost           // destination unplugged by accident; reopened when it comes back
-	marked map[string]bool // sources picked with space
-	logs   []string
-	cat    cat
-	bar    progress.Model
-	width  int
+	run        run
+	lost       *lost           // destination unplugged by accident; reopened when it comes back
+	marked     map[string]bool // sources picked with space
+	logs       []string
+	logScroll  int // wrapped lines above the live log tail; zero follows new messages
+	cat        cat
+	bar        progress.Model
+	width      int
+	height     int
+	space      device.SpaceInfo
+	spaceKnown bool
 }
 
 // run is the state of the current sync. Its messages carry ch, so events from a cancelled run
@@ -97,11 +103,13 @@ type (
 		err              error
 	}
 	mountsMsg struct {
-		list     []device.Mount
-		watched  string // folder that was open when checked
-		gone     bool   // it no longer exists: the device was unplugged
-		lostPath string // unplugged destination that was checked
-		back     bool   // it exists again: the device was plugged back in
+		list       []device.Mount
+		watched    string // folder that was open when checked
+		gone       bool   // it no longer exists: the device was unplugged
+		lostPath   string // unplugged destination that was checked
+		back       bool   // it exists again: the device was plugged back in
+		space      device.SpaceInfo
+		spaceKnown bool
 	}
 )
 
@@ -111,7 +119,7 @@ func Run(dest string, opt engine.Options, format string) error {
 	in.Prompt = hi.Render("› ")
 	in.CharLimit = 4096
 	m := model{
-		opt: opt, format: format, input: in, width: 80,
+		opt: opt, format: format, input: in, width: 80, height: 24,
 		bar:    progress.New(progress.WithGradient("#7c3aed", "#f0abfc"), progress.WithWidth(24)),
 		marked: map[string]bool{}, run: run{jobs: map[string]*job{}},
 	}
@@ -122,7 +130,7 @@ func Run(dest string, opt engine.Options, format string) error {
 	} else {
 		m.mounts = device.List()
 	}
-	final, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
 	if fm, ok := final.(model); ok && fm.run.cancel != nil {
 		fm.run.cancel()
 	}
@@ -135,13 +143,20 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
+		m.width, m.height = msg.Width, msg.Height
 		m.bar.Width = max(10, min(30, msg.Width/4))
+		m.input.Width = max(1, msg.Width-6)
+		m.scrollLogs(0)
+	case tea.MouseMsg:
+		return m.mouse(msg)
 	case catTickMsg:
 		m.cat.frame++
 		return m, catTick()
 	case mountsMsg:
 		m.mounts = msg.list
+		if m.eng != nil && msg.watched == m.eng.Root() {
+			m.space, m.spaceKnown = msg.space, msg.spaceKnown
+		}
 		// only if the same folder is still open; otherwise the next check covers the new one
 		if msg.gone && msg.watched == m.watched() {
 			m.unplugged(msg.watched)
@@ -186,6 +201,10 @@ func (m *model) openDest(p string) error {
 		}
 	}
 	m.eng, m.screen, m.cursor, m.logs = eng, screenSources, 0, nil
+	m.logScroll = 0
+	m.browseReturn = false
+	m.space, err = device.Space(eng.Root())
+	m.spaceKnown = err == nil
 	m.lost = nil // opening any destination ends the wait for an unplugged one
 	return nil
 }
@@ -196,10 +215,14 @@ func (m *model) use(p string) {
 	}
 }
 func (m *model) log(s string) {
-	m.logs = append(m.logs, s)
-	if len(m.logs) > 6 {
-		m.logs = m.logs[len(m.logs)-6:]
+	if m.logScroll > 0 {
+		m.logScroll += len(m.wrapLog(s))
 	}
+	m.logs = append(m.logs, s)
+	if len(m.logs) > logLimit {
+		m.logs = m.logs[len(m.logs)-logLimit:]
+	}
+	m.scrollLogs(0)
 }
 
 func (m *model) fail(err error) { m.log(bad.Render("✗ " + err.Error())) }

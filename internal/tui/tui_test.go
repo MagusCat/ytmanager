@@ -115,8 +115,12 @@ func TestBrowseSettingsPaste(t *testing.T) {
 	m.run.busy = false
 
 	m = press(m, "c")
-	if m.eng != nil || m.screen != screenBrowse || m.browse != want {
+	if m.eng == nil || m.eng.Root() != want || m.screen != screenBrowse || m.browse != want {
 		t.Fatalf("change destination: screen %d browse %q", m.screen, m.browse)
+	}
+	m = press(m, "esc")
+	if m.screen != screenSources || m.eng.Root() != want {
+		t.Fatal("Esc did not return to the previous destination")
 	}
 }
 

@@ -20,7 +20,10 @@ var (
 
 func (m model) View() string {
 	var b strings.Builder
-	w := max(40, m.width-4)
+	if m.terminalWidth() < 30 || m.terminalHeight() < 12 {
+		return fitLines("Enlarge terminal to at least 30x12.", m.terminalWidth(), m.terminalHeight())
+	}
+	w := m.terminalWidth() - 4
 	switch m.screen {
 	case screenDevices:
 		m.devicesView(&b, w)
@@ -33,7 +36,7 @@ func (m model) View() string {
 	default:
 		m.sourcesView(&b, w)
 	}
-	return b.String()
+	return fitLines(b.String(), m.terminalWidth(), m.terminalHeight())
 }
 
 func header(b *strings.Builder, subtitle string) {
@@ -46,19 +49,20 @@ func panel(b *strings.Builder, w int, rows []string) {
 
 // footer writes the recent log, the text input when it is open, and the key help.
 func (m model) footer(b *strings.Builder, help string) {
+	bodyHeight := max(0, m.terminalHeight()-m.footerHeight(help))
+	body := fitLines(b.String(), m.terminalWidth(), max(1, bodyHeight))
+	b.Reset()
+	if bodyHeight > 0 {
+		b.WriteString(body)
+		b.WriteString(strings.Repeat("\n", max(0, bodyHeight-strings.Count(body, "\n"))))
+	}
 	if len(m.logs) > 0 {
-		b.WriteString("\n")
-		for _, l := range m.logs {
-			for _, line := range strings.Split(ansi.Wrap(l, max(20, m.width-6), ""), "\n") {
-				b.WriteString(dim.Render("  "+line) + "\n")
-			}
-		}
+		b.WriteString(m.logsView() + "\n")
 	}
 	if m.prompt != promptNone {
-		b.WriteString("\n" + m.input.View() + "\n")
-		help = "enter confirm · esc cancel"
+		b.WriteString("\n" + ansi.Truncate(m.input.View(), m.terminalWidth(), "…") + "\n")
 	}
-	b.WriteString("\n" + dim.Render(help))
+	b.WriteString("\n" + dim.Render(strings.Join(m.helpLines(help), "\n")))
 }
 
 func pick(on bool, s string) string {
@@ -66,15 +70,6 @@ func pick(on bool, s string) string {
 		return hi.Render("› ") + s
 	}
 	return "  " + s
-}
-
-// scroll shows at most n rows around the cursor.
-func scroll(rows []string, cur, n int) []string {
-	if len(rows) <= n {
-		return rows
-	}
-	start := min(max(0, cur-n/2), len(rows)-n)
-	return rows[start : start+n]
 }
 
 func cut(s string, n int) string {

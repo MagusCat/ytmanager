@@ -82,6 +82,24 @@ ytmanager ~/Music         # open a folder directly
 | Unavailable songs | paste or `enter` an alternative link · `r` retry · `esc` back |
 | Settings | `↑↓` move · `←→` change · `enter` run an action · `esc` back |
 
+Lists scroll to keep the selected row visible; `home` / `end` jump to the first / last source.
+Logs have their own area and retain up to 500 messages. Use `PgUp` / `PgDn` to scroll them,
+`Ctrl+Home` for the oldest retained message, and `Ctrl+End` to follow new messages again.
+The mouse wheel scrolls the list or logs under the pointer. Both areas adapt to terminal resizing.
+
+Picked the wrong folder? Press `esc`, `backspace` or `c` in the library to reopen the folder
+browser. Use `←` to go up, `→` to enter a subfolder, `u` to choose it, or `e` to enter a path.
+Press `esc` to return to the current library without changing it; `d` shows devices again.
+Settings also include *Choose destination folder*. Finish or cancel an active operation before
+switching destinations.
+
+The library shows free space and capacity, refreshed every two seconds. During downloads and
+reorganization, ytmanager checks the destination and local temporary storage and stops when
+space drops below a 32 MB reserve. Copies also check room for the full file before writing.
+Completed files stay in the library; free up space and sync to resume pending downloads.
+Storage failures do not mark songs unavailable. If a device cannot report its capacity, the
+indicator says so and actual write errors are still handled.
+
 ### Headless (scripts, cron)
 
 ```sh
@@ -114,6 +132,7 @@ Press `o` in the library. Everything except the format is saved in
 | Video titles | `clean` (default) or `as uploaded` |
 | Move files to new folders | Applies the Folders setting to what is already downloaded, without downloading. |
 | Download everything again | Applies every setting, including format, artists and titles. Each old file is replaced as its new one arrives. |
+| Choose destination folder | Reopens the folder browser; `esc` returns to the current library. |
 
 ## What a destination looks like
 

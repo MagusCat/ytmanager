@@ -10,12 +10,16 @@ import (
 )
 
 var (
-	browsers   = []string{"", "firefox", "chrome", "chromium", "brave", "edge", "vivaldi", "opera"}
-	artists    = []string{"", "main", "all"}
-	folders    = []string{"", "artist", "flat"}
-	settings   = []string{"Format", "Parallel downloads", "Browser cookies", "Artists", "Folders", "Video titles", "Move files to new folders", "Download everything again"}
-	moveFiles  = len(settings) - 2
-	reorganize = len(settings) - 1
+	browsers = []string{"", "firefox", "chrome", "chromium", "brave", "edge", "vivaldi", "opera"}
+	artists  = []string{"", "main", "all"}
+	folders  = []string{"", "artist", "flat"}
+	settings = []string{"Format", "Parallel downloads", "Browser cookies", "Artists", "Folders", "Video titles", "Move files to new folders", "Download everything again", "Choose destination folder"}
+)
+
+const (
+	moveFiles         = 6
+	reorganize        = 7
+	chooseDestination = 8
 )
 
 // labels shows the empty default of artists and folders.
@@ -31,6 +35,9 @@ func (m model) settingsKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.moveFiles()
 		case reorganize:
 			return m, m.reorganize()
+		case chooseDestination:
+			m.changeDestination()
+			return m, nil
 		}
 		m.screen, m.cursor = screenSources, 0
 	case "esc", "o":
@@ -69,7 +76,7 @@ func (m *model) changeSetting(step int) {
 		m.opt.Folders = cycle(folders, m.opt.Folders, step)
 	case 5:
 		m.opt.RawTitles = !m.opt.RawTitles
-	case moveFiles, reorganize:
+	case moveFiles, reorganize, chooseDestination:
 		return
 	}
 	if m.cursor > 0 {
@@ -146,6 +153,8 @@ func (m model) settingsView(b *strings.Builder, w int) {
 			note := "enter: apply Folders to what is already downloaded, no download"
 			if i == reorganize {
 				note = "enter: also applies Format, Artists and Video titles"
+			} else if i == chooseDestination {
+				note = "enter: choose another folder or subfolder"
 			}
 			if i == moveFiles {
 				rows = append(rows, "")
@@ -155,6 +164,10 @@ func (m model) settingsView(b *strings.Builder, w int) {
 		}
 		rows = append(rows, pick(m.cursor == i, fmt.Sprintf("%-20s ‹ %s ›  %s", s, hi.Render(vals[i]), dim.Render(notes[i]))))
 	}
-	panel(b, w, rows)
-	m.footer(b, "↑↓ move · ←→ change · esc back")
+	selectedRow := m.cursor
+	if m.cursor >= moveFiles {
+		selectedRow++ // the blank row before the actions is not selectable
+	}
+	m.listPanel(b, w, rows, selectedRow, 1, 0)
+	m.footer(b, m.help())
 }

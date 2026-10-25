@@ -25,6 +25,10 @@ func detect(delay time.Duration, watched, lostPath string) tea.Cmd {
 		if watched != "" {
 			_, err := os.Stat(watched)
 			msg.gone = err != nil
+			if !msg.gone {
+				msg.space, err = device.Space(watched)
+				msg.spaceKnown = err == nil
+			}
 		}
 		if lostPath != "" {
 			_, err := os.Stat(lostPath)
@@ -62,6 +66,7 @@ func (m *model) unplugged(p string) {
 	}
 	m.run = run{jobs: map[string]*job{}} // detach: the cancelled run's messages are now stale
 	m.eng, m.screen, m.cursor, m.prompt = nil, screenDevices, 0, promptNone
+	m.browseReturn, m.spaceKnown = false, false
 	m.marked = map[string]bool{}
 	m.input.Reset()
 	m.log(bad.Render("✗ " + device.Label(p) + " was disconnected. Plug it back in and it will resume by itself."))
