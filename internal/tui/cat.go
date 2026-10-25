@@ -49,7 +49,7 @@ func (m model) catView(w int) string {
 	}
 	x, track := 0, ""
 
-	if m.run.busy { // walk along the track; while paused the cat sleeps where it stopped
+	if m.run.busy && m.run.total > 0 { // walk along the track; while paused the cat sleeps where it stopped
 		trackW := min(w-4, 60)
 		p := m.run.progress()
 		x = int(p * float64(trackW-catWidth))
@@ -64,6 +64,8 @@ func (m model) catView(w int) string {
 		if len(m.lost.urls) > 0 {
 			say += " I will resume the download."
 		}
+	case m.run.busy && m.run.readingURL != "" && len(m.run.jobs) == 0:
+		say = "Waiting for yt-dlp to list the source…"
 	case m.run.busy && m.eng.Paused():
 		face = "blink"
 		say = "z" + strings.Repeat("Z", f/3%3) + "  paused, p to resume"

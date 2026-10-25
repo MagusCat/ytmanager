@@ -89,6 +89,12 @@ func wait(ch chan tea.Msg) tea.Cmd { return func() tea.Msg { return <-ch } }
 func (m *model) apply(e engine.Event) {
 	r := &m.run
 	switch e.Kind {
+	case engine.EvReading:
+		r.readingURL, r.readingSince = e.ID, time.Now()
+	case engine.EvReadDone:
+		if r.readingURL == e.ID {
+			r.readingURL, r.readingSince = "", time.Time{}
+		}
 	case engine.EvLog:
 		m.log(e.Msg)
 	case engine.EvPlan:

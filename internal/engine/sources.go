@@ -46,6 +46,8 @@ func (e *Engine) readSource(ctx context.Context, request manifest.SourceRequest,
 	}
 	e.mu.Unlock()
 
+	emit(Event{Kind: EvReading, ID: request.URL})
+	defer emit(Event{Kind: EvReadDone, ID: request.URL})
 	emit(Event{Kind: EvLog, Msg: "Reading " + request.URL})
 	list := e.listSource
 	if list == nil {

@@ -27,8 +27,10 @@ type Options struct {
 type EventKind string
 
 const (
-	EvLog         EventKind = "log"  // Msg is a line for the user
-	EvPlan        EventKind = "plan" // Total tracks are about to be downloaded
+	EvLog         EventKind = "log"     // Msg is a line for the user
+	EvPlan        EventKind = "plan"    // Total tracks are about to be downloaded
+	EvReading     EventKind = "reading" // ID is the source URL
+	EvReadDone    EventKind = "read_done"
 	EvStart       EventKind = "start"
 	EvProgress    EventKind = "progress"    // Pct of the current track, 0..1
 	EvStopped     EventKind = "stopped"     // a track was interrupted by pause or cancel; it stays pending

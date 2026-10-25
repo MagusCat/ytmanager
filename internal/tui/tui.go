@@ -70,18 +70,20 @@ type model struct {
 // run is the state of the current sync. Its messages carry ch, so events from a cancelled run
 // that arrive after a new one started are recognised and ignored.
 type run struct {
-	busy        bool
-	verb        string // what finished tracks were: downloaded | moved
-	urls        []string
-	ch          chan tea.Msg
-	cancel      context.CancelFunc
-	queue       []string // links added just as a sync was ending; started right after it
-	jobs        map[string]*job
-	order       []string
-	total       int // tracks to download in this sync
-	done        int
-	failed      int
-	unavailable int
+	readingURL   string
+	readingSince time.Time
+	busy         bool
+	verb         string // what finished tracks were: downloaded | moved
+	urls         []string
+	ch           chan tea.Msg
+	cancel       context.CancelFunc
+	queue        []string // links added just as a sync was ending; started right after it
+	jobs         map[string]*job
+	order        []string
+	total        int // tracks to download in this sync
+	done         int
+	failed       int
+	unavailable  int
 }
 
 type job struct {

@@ -139,12 +139,13 @@ func (m model) sourcesView(b *strings.Builder, w int) {
 func (m model) sourceActivity(w int) string {
 	if m.terminalHeight() < 24 {
 		if m.run.busy && (m.terminalHeight() >= 16 || m.prompt == promptNone) {
-			return fmt.Sprintf("  %s %d/%d · %d active\n", m.run.verb, m.run.done, m.run.total, len(m.run.jobs)) + m.activeAlbums(w)
+			return m.readingActivity(w) + fmt.Sprintf("  %s %d/%d · %d active\n", m.run.verb, m.run.done, m.run.total, len(m.run.jobs)) + m.activeAlbums(w)
 		}
 		return ""
 	}
 	var b strings.Builder
 	if m.run.busy {
+		b.WriteString(m.readingActivity(w))
 		b.WriteString(m.activeAlbums(w))
 		limit := 1
 		if m.terminalHeight() >= 32 {
