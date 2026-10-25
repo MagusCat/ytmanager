@@ -65,6 +65,7 @@ type model struct {
 // that arrive after a new one started are recognised and ignored.
 type run struct {
 	busy        bool
+	verb        string // what finished tracks were: downloaded | moved
 	urls        []string
 	ch          chan tea.Msg
 	cancel      context.CancelFunc

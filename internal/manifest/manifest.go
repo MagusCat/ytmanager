@@ -21,6 +21,7 @@ type Source struct {
 	Type     string    `json:"type"` // playlist | album | mix | track
 	ID       string    `json:"id"`
 	Title    string    `json:"title"`
+	Creator  string    `json:"creator,omitempty"` // artist, channel or playlist owner
 	URL      string    `json:"url"`
 	LastSync time.Time `json:"last_sync"`
 	Tracks   []string  `json:"tracks"`

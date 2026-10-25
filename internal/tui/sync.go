@@ -46,12 +46,25 @@ func (m *model) add(words []string) tea.Cmd {
 }
 
 func (m *model) sync(urls []string) tea.Cmd {
+	eng := m.eng
+	return m.start(urls, "downloaded", func(ctx context.Context, emit func(engine.Event)) error {
+		return eng.Sync(ctx, urls, emit)
+	})
+}
+
+// rearrange moves the downloaded files to the current folder layout.
+func (m *model) rearrange() tea.Cmd {
+	eng := m.eng
+	return m.start(nil, "moved", eng.Rearrange)
+}
+
+// start runs a sync or rearrange in the background; urls are resumed if the device reconnects.
+func (m *model) start(urls []string, verb string, do func(context.Context, func(engine.Event)) error) tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan tea.Msg, 256)
-	m.run = run{busy: true, urls: urls, ch: ch, cancel: cancel, queue: m.run.queue, jobs: map[string]*job{}}
-	eng := m.eng
+	m.run = run{busy: true, verb: verb, urls: urls, ch: ch, cancel: cancel, queue: m.run.queue, jobs: map[string]*job{}}
 	go func() {
-		err := eng.Sync(ctx, urls, func(e engine.Event) { ch <- eventMsg{ch, e} })
+		err := do(ctx, func(e engine.Event) { ch <- eventMsg{ch, e} })
 		ch <- doneMsg{ch, err}
 	}()
 	return wait(ch)
@@ -108,7 +121,7 @@ func (m *model) finish(err error) tea.Cmd {
 	case err != nil:
 		m.fail(err)
 	default:
-		msg := fmt.Sprintf("✓ Done: %d downloaded, %d errors", r.done, r.failed)
+		msg := fmt.Sprintf("✓ Done: %d %s, %d errors", r.done, r.verb, r.failed)
 		if r.unavailable > 0 {
 			msg += fmt.Sprintf(", %d unavailable (n)", r.unavailable)
 		}

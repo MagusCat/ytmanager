@@ -1,7 +1,10 @@
 package ytdlp
 
 import (
+	"context"
 	"errors"
+	"os/exec"
+	"path/filepath"
 	"testing"
 )
 
@@ -79,6 +82,23 @@ func TestKind(t *testing.T) {
 	for url, want := range cases {
 		if got := Kind(url); got != want {
 			t.Errorf("Kind(%q) = %q, want %q", url, got, want)
+		}
+	}
+}
+
+// Name runs yt-dlp offline; skipped where it is not installed.
+func TestName(t *testing.T) {
+	if _, err := exec.LookPath("yt-dlp"); err != nil {
+		t.Skip("yt-dlp not installed")
+	}
+	tags := map[string]string{"title": "Hello: World", "album_artist": "AC/DC", "album": "Back", "track": "2/12"}
+	for folders, want := range map[string]string{
+		"":       filepath.Join("AC⧸DC", "Back", "02 - Hello： World.opus"),
+		"artist": filepath.Join("AC⧸DC", "Hello： World.opus"),
+		"flat":   "AC⧸DC - Hello： World.opus",
+	} {
+		if got, err := Name(context.Background(), tags, "opus", folders); err != nil || got != want {
+			t.Errorf("%q: got %q, %v; want %q", folders, got, err, want)
 		}
 	}
 }

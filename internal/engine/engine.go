@@ -16,6 +16,11 @@ import (
 type Options struct {
 	Cookies string `json:"cookies"` // browser to read YouTube cookies from; "" = none
 	Jobs    int    `json:"jobs"`    // parallel downloads
+
+	// how tracks are tagged and named; "" is the default
+	Artists   string `json:"artists,omitempty"`    // "" = main artist, the rest as "(feat. …)" in the title | main | all
+	Folders   string `json:"folders,omitempty"`    // "" = Artist/Album | artist | flat
+	RawTitles bool   `json:"raw_titles,omitempty"` // keep "(Official Video)" and the like in video titles
 }
 
 type EventKind string
@@ -40,8 +45,8 @@ type Event struct {
 }
 
 type SourceView struct {
-	ID, Type, Title, URL     string
-	Done, Total, Unavailable int
+	ID, Type, Title, URL, Creator string
+	Done, Total, Unavailable      int
 }
 
 // MissingView is an unavailable track plus the first source it appears in.
@@ -104,7 +109,8 @@ func (e *Engine) Snapshot() []SourceView {
 	out := make([]SourceView, len(e.m.Sources))
 	for i, s := range e.m.Sources {
 		d, t, u := e.m.Count(s)
-		out[i] = SourceView{s.ID, s.Type, s.Title, s.URL, d, t, u}
+		out[i] = SourceView{ID: s.ID, Type: s.Type, Title: s.Title, URL: s.URL, Creator: s.Creator,
+			Done: d, Total: t, Unavailable: u}
 	}
 	return out
 }
@@ -149,6 +155,21 @@ func (e *Engine) SetAlt(ctx context.Context, id, url string) (string, error) {
 	defer e.mu.Unlock()
 	t.Alt, t.Status, t.Error, t.Fails = l.Entries[i].ID, manifest.StatusPending, "", 0
 	return l.Entries[i].Title, e.m.Save()
+}
+
+// Reorganize marks every downloaded track pending, so the next sync downloads it again with the
+// current format and settings; each old file is removed once its replacement is in place.
+func (e *Engine) Reorganize() (int, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	n := 0
+	for _, t := range e.m.Tracks {
+		if t.Status == manifest.StatusDone {
+			t.Status = manifest.StatusPending
+			n++
+		}
+	}
+	return n, e.m.Save()
 }
 
 // Retry marks an unavailable track pending again, in case the error was temporary.

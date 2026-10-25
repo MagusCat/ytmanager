@@ -39,7 +39,8 @@ func main() {
 	if *format != "" && !ytdlp.ValidFormat(*format) {
 		die(fmt.Errorf("invalid format %q (opus, m4a, mp3)", *format))
 	}
-	opt := engine.Options{Cookies: *cookies, Jobs: *jobs}
+	opt := saved
+	opt.Cookies, opt.Jobs = *cookies, *jobs
 
 	args := flag.Args()
 	if len(args) >= 2 && (args[0] == "sync" || args[0] == "add") {

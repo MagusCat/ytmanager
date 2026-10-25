@@ -12,6 +12,7 @@ import (
 )
 
 type Entry struct {
+	creatorMetadata
 	ID          string  `json:"id"`
 	Title       string  `json:"title"`
 	Duration    float64 `json:"duration"`
@@ -19,8 +20,8 @@ type Entry struct {
 }
 
 type Listing struct {
-	Type, ID, Title string
-	Entries         []Entry
+	Type, ID, Title, Creator string
+	Entries                  []Entry
 }
 
 // Kind classifies a URL. YT Music albums are OLAK5uy_ playlists or browse/MPREb pages; RD lists
@@ -69,7 +70,12 @@ func List(ctx context.Context, url, cookies string) (*Listing, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseListing(out, url)
+}
+
+func parseListing(out []byte, url string) (*Listing, error) {
 	var r struct {
+		creatorMetadata
 		Type    string  `json:"_type"`
 		ID      string  `json:"id"`
 		Title   string  `json:"title"`
@@ -82,6 +88,7 @@ func List(ctx context.Context, url, cookies string) (*Listing, error) {
 	l := &Listing{Type: Kind(url), ID: r.ID, Title: strings.TrimPrefix(r.Title, "Album - ")}
 	if r.Type != "playlist" {
 		l.Type = "track"
+		l.Creator = r.creatorMetadata.creator()
 		l.Entries = []Entry{{ID: r.ID, Title: r.Title, Duration: r.Dur}}
 		return l, nil
 	}
@@ -92,6 +99,7 @@ func List(ctx context.Context, url, cookies string) (*Listing, error) {
 		e.Unavailable = e.Title == "[Private video]" || e.Title == "[Deleted video]"
 		l.Entries = append(l.Entries, e)
 	}
+	l.Creator = listingCreator(l.Type, r.creatorMetadata, l.Entries)
 	return l, nil
 }
 

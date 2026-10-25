@@ -21,19 +21,31 @@ var audioArgs = map[string][]string{
 
 func ValidFormat(f string) bool { _, ok := audioArgs[f]; return ok }
 
-// Download fetches the audio of video id, described by an enriched info-json, and returns its
-// final path under root.
+// naming makes file names valid on phones and Windows; Name must use the same flags.
+var naming = []string{"--windows-filenames", "--trim-filenames", "180"}
+
+// layouts are the output templates for each Options.Folders value.
+// shortcut: artist and flat drop the album, so two songs with the same artist and title share a
+// file; add the album or video id to the name if that happens in practice.
+var layouts = map[string]string{
+	"":       "%(album_artist|Unknown)s/%(album|Singles)s/%(ytm_prefix|)s%(track,title)s.%(ext)s",
+	"artist": "%(album_artist|Unknown)s/%(track,title)s.%(ext)s",
+	"flat":   "%(album_artist|Unknown)s - %(track,title)s.%(ext)s",
+}
+
+// Download fetches the audio of video id, described by an enriched info-json, into the folders
+// layout and returns its final path under root.
 //
 // yt-dlp runs in a local staging folder and the result is copied to root: on MTP (gvfs) yt-dlp
 // cannot move files (no utime) and --windows-filenames would rewrite the ':' in gvfs/mtp:host=….
 // The folder is named after the video and kept when ctx is cancelled, so after a pause yt-dlp
 // continues the .part file instead of starting over.
-func Download(ctx context.Context, id, infoJSON, root, format, cookies string, progress func(float64)) (string, error) {
+func Download(ctx context.Context, id, infoJSON, root, format, folders, cookies string, progress func(float64)) (string, error) {
 	stage := filepath.Join(os.TempDir(), "ytmanager", id)
 	if err := os.MkdirAll(stage, 0o755); err != nil {
 		return "", err
 	}
-	file, err := run(ctx, stage, infoJSON, format, cookies, progress)
+	file, err := run(ctx, stage, infoJSON, format, folders, cookies, progress)
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
@@ -46,25 +58,24 @@ func Download(ctx context.Context, id, infoJSON, root, format, cookies string, p
 		return "", err
 	}
 	dst := filepath.Join(root, rel)
-	return dst, copyFile(file, dst)
+	return dst, CopyFile(file, dst)
 }
 
 // run executes yt-dlp in stage and returns the absolute path of the file it produced.
-func run(ctx context.Context, stage, infoJSON, format, cookies string, progress func(float64)) (string, error) {
+func run(ctx context.Context, stage, infoJSON, format, folders, cookies string, progress func(float64)) (string, error) {
 	args := append(base(cookies),
 		"--load-info-json", infoJSON,
 		"-f", "bestaudio/best", "-x",
 		"--embed-metadata", "--embed-thumbnail", "--convert-thumbnails", "jpg",
 		// square cover: center-crop the 16:9 thumbnail
 		"--ppa", `ThumbnailsConvertor+FFmpeg_o:-c:v mjpeg -vf crop="'if(gt(ih,iw),iw,ih)':'if(gt(iw,ih),ih,iw)'"`,
-		"--windows-filenames", "--trim-filenames", "180",
 		"-P", ".",
-		"-o", "%(artist|Unknown)s/%(album|Singles)s/%(ytm_prefix|)s%(track,title)s.%(ext)s",
+		"-o", layouts[folders],
 		"--print", "after_move:FILE %(filepath)s",
 		"--progress", "--newline",
 		"--progress-template", "download:PROG %(progress.downloaded_bytes)s %(progress.total_bytes,progress.total_bytes_estimate)s",
 	)
-	args = append(args, audioArgs[format]...)
+	args = append(append(args, naming...), audioArgs[format]...)
 
 	pr, pw := io.Pipe()
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
@@ -110,9 +121,9 @@ func run(ctx context.Context, stage, infoJSON, format, cookies string, progress 
 	return file, nil
 }
 
-// copyFile copies without preserving times or permissions (MTP supports neither) and removes a
+// CopyFile copies without preserving times or permissions (MTP supports neither) and removes a
 // partial copy on failure.
-func copyFile(src, dst string) error {
+func CopyFile(src, dst string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}

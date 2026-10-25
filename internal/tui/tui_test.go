@@ -69,6 +69,25 @@ func TestBrowseSettingsPaste(t *testing.T) {
 		t.Fatalf("settings: format %s, jobs %d, saved %d", m.eng.Format(), m.opt.Jobs, engine.LoadOptions().Jobs)
 	}
 
+	m = press(m, "o", "down", "down", "down", "right", "down", "right", "down", "right", "esc")
+	if o := engine.LoadOptions(); o.Artists != "main" || o.Folders != "artist" || !o.RawTitles {
+		t.Fatalf("tag settings not saved: %+v", o)
+	}
+	m = press(m, "o", "down", "down", "down", "down", "down", "down", "down", "enter") // reorganize with nothing downloaded
+	if m.screen != screenSources || m.run.busy || !strings.Contains(m.logs[len(m.logs)-1], "Nothing downloaded") {
+		t.Fatalf("reorganize: screen %v busy %v", m.screen, m.run.busy)
+	}
+
+	m = press(m, "o", "down", "down", "down", "down", "down", "down", "enter") // move files
+	if m.screen != screenSources || !m.run.busy || m.run.verb != "moved" {
+		t.Fatalf("move files: screen %v busy %v verb %q", m.screen, m.run.busy, m.run.verb)
+	}
+	if msg, ok := (<-m.run.ch).(eventMsg); !ok || msg.Kind != engine.EvPlan || msg.Total != 0 {
+		t.Fatalf("move files: first message %+v", msg)
+	}
+	next, _ := m.Update(<-m.run.ch) // doneMsg
+	m = next.(model)
+
 	m.run.busy = true // pasting during a sync queues the link
 	m = paste(m, "https://music.youtube.com/playlist?list=X")
 	if len(m.run.queue) != 1 {

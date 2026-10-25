@@ -84,7 +84,7 @@ func (e *Engine) schedule(ctx context.Context, urls []string, emit func(Event)) 
 		go func() {
 			defer wg.Done()
 			for id := range work {
-				e.worker(ctx, id, emit)
+				e.worker(ctx, id, emit, e.track)
 				finished <- struct{}{}
 			}
 		}()
@@ -148,14 +148,14 @@ loop:
 	}
 }
 
-// worker downloads one track, retrying it after Resume if Pause interrupted it.
-func (e *Engine) worker(ctx context.Context, id string, emit func(Event)) {
+// worker runs do on one track (download or move), retrying it after Resume if Pause interrupted it.
+func (e *Engine) worker(ctx context.Context, id string, emit func(Event), do func(context.Context, string, func(Event)) bool) {
 	for {
 		tctx, release, err := e.gate.wait(ctx)
 		if err != nil {
 			return // cancelled while paused
 		}
-		done := e.track(tctx, id, emit)
+		done := do(tctx, id, emit)
 		release()
 		if done || ctx.Err() != nil {
 			return
@@ -225,6 +225,9 @@ func (e *Engine) readSources(ctx context.Context, urls []string, emit func(Event
 		}
 		e.mu.Lock()
 		src := e.m.Merge(l.Type, l.ID, l.Title, u, entries)
+		if l.Creator != "" {
+			src.Creator = l.Creator
+		}
 		err = e.m.Save()
 		e.mu.Unlock()
 		if err != nil {

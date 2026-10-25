@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"ytmanager/internal/device"
 	"ytmanager/internal/engine"
@@ -102,6 +103,11 @@ func (m model) sourcesView(b *strings.Builder, w int) {
 			tw = max(10, tw-14)
 		}
 		rows = append(rows, pick(i == m.cursor, fmt.Sprintf("%s %-9s %-*s %s", mark, tags[s.Type], tw, cut(s.Title, tw), count)))
+		origin := s.URL
+		if s.Creator != "" {
+			origin = "By " + s.Creator
+		}
+		rows = append(rows, dim.Render("    "+ansi.Truncate(strings.Join(strings.Fields(origin), " "), max(1, w-8), "…")))
 	}
 	if len(rows) == 0 {
 		rows = []string{dim.Render("No sources yet. Paste a playlist, album or song link to start downloading.")}

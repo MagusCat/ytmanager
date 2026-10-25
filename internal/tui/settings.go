@@ -10,14 +10,30 @@ import (
 )
 
 var (
-	browsers = []string{"", "firefox", "chrome", "chromium", "brave", "edge", "vivaldi", "opera"}
-	settings = []string{"Format", "Parallel downloads", "Browser cookies"}
+	browsers   = []string{"", "firefox", "chrome", "chromium", "brave", "edge", "vivaldi", "opera"}
+	artists    = []string{"", "main", "all"}
+	folders    = []string{"", "artist", "flat"}
+	settings   = []string{"Format", "Parallel downloads", "Browser cookies", "Artists", "Folders", "Video titles", "Move files to new folders", "Download everything again"}
+	moveFiles  = len(settings) - 2
+	reorganize = len(settings) - 1
 )
+
+// labels shows the empty default of artists and folders.
+var labels = map[string]string{"": "feat. in title", "main": "main only", "all": "all in artist"}
+var folderLabels = map[string]string{"": "Artist/Album", "artist": "Artist", "flat": "no folders"}
 
 func (m model) settingsKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	step := 0
 	switch k.String() {
-	case "esc", "o", "enter":
+	case "enter":
+		switch m.cursor {
+		case moveFiles:
+			return m, m.moveFiles()
+		case reorganize:
+			return m, m.reorganize()
+		}
+		m.screen, m.cursor = screenSources, 0
+	case "esc", "o":
 		m.screen, m.cursor = screenSources, 0
 	case "up", "k":
 		m.cursor = max(0, m.cursor-1)
@@ -47,6 +63,14 @@ func (m *model) changeSetting(step int) {
 		m.opt.Jobs = min(8, max(1, m.opt.Jobs+step))
 	case 2:
 		m.opt.Cookies = cycle(browsers, m.opt.Cookies, step)
+	case 3:
+		m.opt.Artists = cycle(artists, m.opt.Artists, step)
+	case 4:
+		m.opt.Folders = cycle(folders, m.opt.Folders, step)
+	case 5:
+		m.opt.RawTitles = !m.opt.RawTitles
+	case moveFiles, reorganize:
+		return
 	}
 	if m.cursor > 0 {
 		m.eng.SetOptions(m.opt)
@@ -55,6 +79,42 @@ func (m *model) changeSetting(step int) {
 	if err != nil {
 		m.fail(err)
 	}
+}
+
+// moveFiles rearranges the downloaded files to the Folders setting without downloading them.
+func (m *model) moveFiles() tea.Cmd {
+	if m.run.busy {
+		m.log(dim.Render("Wait for the download to finish before moving files."))
+		return nil
+	}
+	m.screen, m.cursor = screenSources, 0
+	m.log(dim.Render("Moving downloaded files to " + folderLabels[m.opt.Folders] + "…"))
+	return m.rearrange()
+}
+
+// reorganize re-downloads the whole library with the current settings and goes back to the
+// sources screen to show the progress.
+func (m *model) reorganize() tea.Cmd {
+	if m.run.busy {
+		m.log(dim.Render("Wait for the download to finish before reorganizing."))
+		return nil
+	}
+	var urls []string
+	for _, s := range m.eng.Snapshot() {
+		urls = append(urls, s.URL)
+	}
+	n, err := m.eng.Reorganize()
+	if err != nil {
+		m.fail(err)
+		return nil
+	}
+	m.screen, m.cursor = screenSources, 0
+	if n == 0 || len(urls) == 0 {
+		m.log(dim.Render("Nothing downloaded yet to reorganize."))
+		return nil
+	}
+	m.log(dim.Render(fmt.Sprintf("Reorganizing %d tracks: each old file is replaced as its new one arrives.", n)))
+	return m.sync(urls)
 }
 
 // cycle returns the value step positions away from cur in list, wrapping around.
@@ -73,10 +133,26 @@ func (m model) settingsView(b *strings.Builder, w int) {
 	if cookies == "" {
 		cookies = "none"
 	}
-	vals := []string{m.eng.Format(), fmt.Sprint(m.opt.Jobs), cookies}
-	notes := []string{"saved in this destination's data.music", "1 to 8 at a time", "for private playlists or Liked Music"}
+	titles := "clean"
+	if m.opt.RawTitles {
+		titles = "as uploaded"
+	}
+	vals := []string{m.eng.Format(), fmt.Sprint(m.opt.Jobs), cookies, labels[m.opt.Artists], folderLabels[m.opt.Folders], titles}
+	notes := []string{"saved in this destination's data.music", "1 to 8 at a time", "for private playlists or Liked Music",
+		"how collaborations are tagged", "how files are arranged", `drops "(Official Video)" and the like`}
 	var rows []string
 	for i, s := range settings {
+		if i >= moveFiles {
+			note := "enter: apply Folders to what is already downloaded, no download"
+			if i == reorganize {
+				note = "enter: also applies Format, Artists and Video titles"
+			}
+			if i == moveFiles {
+				rows = append(rows, "")
+			}
+			rows = append(rows, pick(m.cursor == i, hi.Render(s)+"  "+dim.Render(note)))
+			continue
+		}
 		rows = append(rows, pick(m.cursor == i, fmt.Sprintf("%-20s ‹ %s ›  %s", s, hi.Render(vals[i]), dim.Render(notes[i]))))
 	}
 	panel(b, w, rows)
