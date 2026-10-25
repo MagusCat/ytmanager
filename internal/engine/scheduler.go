@@ -10,13 +10,14 @@ import (
 )
 
 // schedule finishes known work before reading links, then lists and downloads
-// one source at a time. Track workers stay parallel within each source.
+// up to AlbumJobs sources at a time, sharing a global track-worker limit.
 func (e *Engine) schedule(parent context.Context, emit func(Event)) error {
 	ctx, cancel := context.WithCancelCause(parent)
 	defer cancel(nil)
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
-	work, finished := make(chan string), make(chan struct{})
+	type task struct{ id, source, title string }
+	work, finished := make(chan task), make(chan task)
 	listed := make(chan sourceResult)
 	spaceFailure := make(chan error, 1)
 	workerEmit := func(event Event) {
@@ -37,9 +38,12 @@ func (e *Engine) schedule(parent context.Context, emit func(Event)) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for id := range work {
-				e.worker(ctx, id, workerEmit, do)
-				finished <- struct{}{}
+			for item := range work {
+				e.worker(ctx, item.id, func(event Event) {
+					event.SourceID, event.SourceTitle = item.source, item.title
+					workerEmit(event)
+				}, do)
+				finished <- item
 			}
 		}()
 	}
@@ -48,17 +52,37 @@ func (e *Engine) schedule(parent context.Context, emit func(Event)) error {
 	if len(backlog) > 0 {
 		emit(Event{Kind: EvLog, Msg: fmt.Sprintf("Resuming %d saved source(s) before reading links.", len(backlog))})
 	}
-	var queue []string
+	var queue []task
+	active := map[string]int{}
+	working := map[string]int{}
+	resuming := len(backlog) > 0
+	lastSource := ""
 	queued, attempted := map[string]bool{}, map[string]bool{}
 	inflight, total, failedReads := 0, 0, 0
 	reading := false
 	plan := func(ids []string) error {
-		add, err := e.plan(ids, queued, emit)
-		if err == nil && len(add) > 0 {
-			queue, total = append(queue, add...), total+len(add)
+		for _, sourceID := range ids {
+			add, err := e.plan([]string{sourceID}, queued, emit)
+			if err != nil {
+				return err
+			}
+			if len(add) == 0 {
+				continue
+			}
+			e.mu.Lock()
+			title := sourceID
+			if source := e.m.Source(sourceID); source != nil {
+				title = source.Title
+			}
+			e.mu.Unlock()
+			for _, id := range add {
+				queue = append(queue, task{id, sourceID, title})
+			}
+			active[sourceID] += len(add)
+			total += len(add)
 			emit(Event{Kind: EvPlan, Total: total})
 		}
-		return err
+		return nil
 	}
 
 loop:
@@ -71,7 +95,10 @@ loop:
 			break loop
 		default:
 		}
-		if len(queue) == 0 && inflight == 0 && !reading {
+		if resuming && len(backlog) == 0 && len(active) == 0 {
+			resuming = false
+		}
+		if len(active) < e.opt.AlbumJobs && !reading && (!resuming || len(backlog) > 0) {
 			if len(backlog) > 0 {
 				id := backlog[0]
 				backlog = backlog[1:]
@@ -81,23 +108,39 @@ loop:
 				}
 				continue
 			}
-			request, ok := e.nextRequest(attempted)
-			if !ok {
+			request, ok := e.nextRequest(attempted, len(active) == 0)
+			if !ok && len(active) == 0 {
 				break
 			}
-			attempted[requestKey(request.URL)], reading = true, true
-			go func() { listed <- e.readSource(ctx, request, workerEmit) }()
+			if ok {
+				attempted[requestKey(request.URL)], reading = true, true
+				go func() { listed <- e.readSource(ctx, request, workerEmit) }()
+			}
 		}
-		var send chan string
-		var next string
+		var send chan task
+		var next task
+		index := 0
 		if len(queue) > 0 {
-			send, next = work, queue[0]
+			for i, item := range queue {
+				if working[item.source] < working[queue[index].source] || (working[item.source] == working[queue[index].source] && queue[index].source == lastSource && item.source != lastSource) {
+					index = i
+				}
+			}
+			send, next = work, queue[index]
 		}
 		select {
 		case send <- next:
-			queue, inflight = queue[1:], inflight+1
-		case <-finished:
+			queue = append(queue[:index], queue[index+1:]...)
+			inflight++
+			working[next.source]++
+			lastSource = next.source
+		case item := <-finished:
 			inflight--
+			working[item.source]--
+			active[item.source]--
+			if active[item.source] == 0 {
+				delete(active, item.source)
+			}
 		case result := <-listed:
 			reading = false
 			if result.err != nil {

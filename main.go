@@ -17,6 +17,7 @@ import (
 func main() {
 	saved := engine.LoadOptions() // what the settings panel saved; flags override it
 	format := flag.String("format", "", "opus | m4a | mp3 (saved in the destination's data.music)")
+	albums := flag.Int("albums", saved.AlbumJobs, "simultaneous albums/playlists (1 to 4; shares -jobs workers)")
 	jobs := flag.Int("jobs", saved.Jobs, "parallel downloads")
 	cookies := flag.String("cookies", saved.Cookies, "browser to read cookies from (firefox, chrome, brave…) for private playlists or Liked Music")
 	flag.Usage = func() {
@@ -41,7 +42,7 @@ func main() {
 		die(fmt.Errorf("invalid format %q (opus, m4a, mp3)", *format))
 	}
 	opt := saved
-	opt.Cookies, opt.Jobs = *cookies, *jobs
+	opt.Cookies, opt.Jobs, opt.AlbumJobs = *cookies, *jobs, *albums
 
 	args := flag.Args()
 	if len(args) >= 2 && (args[0] == "sync" || args[0] == "add" || args[0] == "resume") {

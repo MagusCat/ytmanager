@@ -51,7 +51,7 @@ func TestAddAndIdleQueue(t *testing.T) {
 	if len(e.m.Queue) != 3 {
 		t.Fatalf("requests lost or duplicated: %+v", e.m.Queue)
 	}
-	if _, ok := e.nextRequest(map[string]bool{"a": true, "b": true, "c": true}); ok || e.accepting {
+	if _, ok := e.nextRequest(map[string]bool{"a": true, "b": true, "c": true}, true); ok || e.accepting {
 		t.Fatal("idle scheduler still accepts requests")
 	}
 	if active, err := e.Add([]string{"d"}); err != nil || active {

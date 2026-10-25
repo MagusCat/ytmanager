@@ -110,7 +110,7 @@ func (e *Engine) completeRequest(raw string) {
 
 // nextRequest also closes the Add race: after it marks the run idle, Add tells
 // its caller to start another run, while its request is already persisted.
-func (e *Engine) nextRequest(attempted map[string]bool) (manifest.SourceRequest, bool) {
+func (e *Engine) nextRequest(attempted map[string]bool, idle bool) (manifest.SourceRequest, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for _, request := range e.m.Queue {
@@ -118,7 +118,9 @@ func (e *Engine) nextRequest(attempted map[string]bool) (manifest.SourceRequest,
 			return request, true
 		}
 	}
-	e.accepting = false
+	if idle {
+		e.accepting = false
+	}
 	return manifest.SourceRequest{}, false
 }
 

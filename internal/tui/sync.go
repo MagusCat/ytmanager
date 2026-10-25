@@ -94,7 +94,7 @@ func (m *model) apply(e engine.Event) {
 	case engine.EvPlan:
 		r.total = e.Total
 	case engine.EvStart:
-		r.jobs[e.ID] = &job{title: e.Title}
+		r.jobs[e.ID] = &job{title: e.Title, sourceID: e.SourceID, sourceTitle: e.SourceTitle}
 		r.order = append(r.order, e.ID)
 	case engine.EvProgress:
 		if j := r.jobs[e.ID]; j != nil {

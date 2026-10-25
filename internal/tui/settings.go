@@ -13,13 +13,13 @@ var (
 	browsers = []string{"", "firefox", "chrome", "chromium", "brave", "edge", "vivaldi", "opera"}
 	artists  = []string{"", "main", "all"}
 	folders  = []string{"", "artist", "flat"}
-	settings = []string{"Format", "Parallel downloads", "Browser cookies", "Artists", "Folders", "Video titles", "Move files to new folders", "Download everything again", "Choose destination folder"}
+	settings = []string{"Format", "Parallel tracks", "Browser cookies", "Artists", "Folders", "Video titles", "Parallel albums", "Move files to new folders", "Download everything again", "Choose destination folder"}
 )
 
 const (
-	moveFiles         = 6
-	reorganize        = 7
-	chooseDestination = 8
+	moveFiles         = 7
+	reorganize        = 8
+	chooseDestination = 9
 )
 
 // labels shows the empty default of artists and folders.
@@ -76,6 +76,8 @@ func (m *model) changeSetting(step int) {
 		m.opt.Folders = cycle(folders, m.opt.Folders, step)
 	case 5:
 		m.opt.RawTitles = !m.opt.RawTitles
+	case 6:
+		m.opt.AlbumJobs = min(4, max(1, max(1, m.opt.AlbumJobs)+step))
 	case moveFiles, reorganize, chooseDestination:
 		return
 	}
@@ -144,9 +146,9 @@ func (m model) settingsView(b *strings.Builder, w int) {
 	if m.opt.RawTitles {
 		titles = "as uploaded"
 	}
-	vals := []string{m.eng.Format(), fmt.Sprint(m.opt.Jobs), cookies, labels[m.opt.Artists], folderLabels[m.opt.Folders], titles}
-	notes := []string{"saved in this destination's data.music", "1 to 8 at a time", "for private playlists or Liked Music",
-		"how collaborations are tagged", "how files are arranged", `drops "(Official Video)" and the like`}
+	vals := []string{m.eng.Format(), fmt.Sprint(m.opt.Jobs), cookies, labels[m.opt.Artists], folderLabels[m.opt.Folders], titles, fmt.Sprint(max(1, m.opt.AlbumJobs))}
+	notes := []string{"saved in this destination's data.music", "1 to 8 total across all albums", "for private playlists or Liked Music",
+		"how collaborations are tagged", "how files are arranged", `drops "(Official Video)" and the like`, "1 to 4 sources; shares Parallel tracks"}
 	var rows []string
 	for i, s := range settings {
 		if i >= moveFiles {

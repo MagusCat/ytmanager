@@ -85,8 +85,9 @@ type run struct {
 }
 
 type job struct {
-	title string
-	pct   float64
+	sourceID, sourceTitle string
+	title                 string
+	pct                   float64
 }
 
 type (

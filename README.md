@@ -14,7 +14,7 @@ It remembers what each destination holds, so syncing again only downloads what i
 - **Incremental sync**: a `data.music` file in each destination tracks every song, so nothing is
   downloaded twice and deleted files come back on the next sync.
 - **Persistent download queue**: saved unfinished tracks are resumed first. Sources are read and
-  downloaded one album or playlist at a time, with parallel song downloads inside each one.
+  downloaded one album or playlist at a time by default; optional parallel albums share the song worker limit.
   Unread links survive closing the app. Adding a completed source skips its listing; an explicit
   sync refreshes it to discover new tracks.
 - **Downloads straight to an Android phone** over MTP (Linux). Phones are detected and mounted
@@ -124,7 +124,8 @@ Flags, usable in both modes:
 | Flag | Default | |
 |------|---------|---|
 | `-format` | `opus` | `opus`, `m4a` or `mp3`. Saved per destination. |
-| `-jobs` | `3` | Parallel downloads. |
+| `-jobs` | `3` | Total parallel song downloads. |
+| `-albums` | `1` | Simultaneous albums/playlists (1–4). |
 | `-cookies` | none | Browser to read cookies from: `firefox`, `chrome`, `chromium`, `brave`, `edge`, `vivaldi`, `opera`. |
 
 Destinations can also be given as `mtp://<phone>/<storage>/Music`.
@@ -137,7 +138,8 @@ Press `o` in the library. Everything except the format is saved in
 | Setting | Options |
 |---------|---------|
 | Format | `opus` (smallest, best quality), `m4a` (Apple devices), `mp3` (old car stereos) |
-| Parallel downloads | 1 to 8 |
+| Parallel tracks | 1 to 8 total across all albums |
+| Parallel albums | 1 to 4 sources |
 | Browser cookies | Needed for private playlists and Liked Music. Log in to YouTube in that browser first. |
 | Artists | `feat. in title`: "Song (feat. B)" by "A" (default) · `main only` · `all in artist`: "A, B" |
 | Folders | `Artist/Album/01 - Song` (default) · `Artist/Song` · `Artist - Song` with no folders |
@@ -223,3 +225,13 @@ go test ./...
 
 Download only content you have the right to download, and respect YouTube's Terms of Service and
 the copyright laws of your country. This project is not affiliated with YouTube or Google.
+
+### Parallel albums
+
+In settings (`o`), choose **Parallel albums** (1–4). **Parallel tracks** is the total
+worker limit shared by all active albums, so use at least 2 tracks to download
+songs from different albums simultaneously. The default remains one album at a
+time. Saved pending downloads still finish before new links are read.
+
+Active sources show `downloading`; the activity area names the albums and each
+track's source. For the CLI: `ytmanager -albums 2 -jobs 4 resume <destination>`.

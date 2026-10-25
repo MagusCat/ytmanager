@@ -96,12 +96,22 @@ func (m model) sourcesView(b *strings.Builder, w int) {
 		if m.marked[s.ID] {
 			mark = hi.Render("●")
 		}
+		active := false
+		for _, j := range m.run.jobs {
+			if j.sourceID == s.ID {
+				active = true
+				break
+			}
+		}
 		count := fmt.Sprintf("%d/%d", s.Done, s.Total)
 		if s.Done+s.Unavailable == s.Total {
 			count = ok.Render(count)
 		}
 		if s.Unavailable > 0 {
 			count += dim.Render(fmt.Sprintf(" · %d unavail.", s.Unavailable))
+		}
+		if active {
+			count = hi.Render("downloading") + " · " + count
 		}
 		prefix := fmt.Sprintf("%s %-9s ", mark, tags[s.Type])
 		tw := max(1, w-7-ansi.StringWidth(prefix)-ansi.StringWidth(count))
@@ -129,12 +139,13 @@ func (m model) sourcesView(b *strings.Builder, w int) {
 func (m model) sourceActivity(w int) string {
 	if m.terminalHeight() < 24 {
 		if m.run.busy && (m.terminalHeight() >= 16 || m.prompt == promptNone) {
-			return fmt.Sprintf("  %s %d/%d · %d active\n", m.run.verb, m.run.done, m.run.total, len(m.run.jobs))
+			return fmt.Sprintf("  %s %d/%d · %d active\n", m.run.verb, m.run.done, m.run.total, len(m.run.jobs)) + m.activeAlbums(w)
 		}
 		return ""
 	}
 	var b strings.Builder
 	if m.run.busy {
+		b.WriteString(m.activeAlbums(w))
 		limit := 1
 		if m.terminalHeight() >= 32 {
 			limit = 3
@@ -145,10 +156,35 @@ func (m model) sourceActivity(w int) string {
 				break
 			}
 			if j := m.run.jobs[id]; j != nil {
-				b.WriteString(fmt.Sprintf("  %-32s %s\n", cut(j.title, 32), m.bar.ViewAs(j.pct)))
+				title := j.title
+				if j.sourceTitle != "" {
+					title = j.sourceTitle + ": " + title
+				}
+				b.WriteString(fmt.Sprintf("  %-32s %s\n", cut(title, 32), m.bar.ViewAs(j.pct)))
 			}
 		}
 	}
 	b.WriteString("\n" + m.catView(w) + "\n")
 	return b.String()
+}
+
+// activeAlbums stays visible even when the source list is scrolled away.
+func (m model) activeAlbums(w int) string {
+	var names []string
+	seen := map[string]bool{}
+	for _, id := range m.run.order {
+		j := m.run.jobs[id]
+		if j != nil && j.sourceTitle != "" && !seen[j.sourceID] {
+			seen[j.sourceID] = true
+			names = append(names, j.sourceTitle)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	label := "Downloading"
+	if m.eng != nil && m.eng.Paused() {
+		label = "Paused"
+	}
+	return "  " + hi.Render(ansi.Truncate(label+": "+strings.Join(names, " · "), max(1, w-4), "…")) + "\n"
 }

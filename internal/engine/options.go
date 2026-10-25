@@ -14,7 +14,7 @@ func optionsPath() (string, error) {
 }
 
 func LoadOptions() Options {
-	o := Options{Jobs: 3}
+	o := Options{Jobs: 3, AlbumJobs: 1}
 	if p, err := optionsPath(); err == nil {
 		if b, err := os.ReadFile(p); err == nil {
 			_ = json.Unmarshal(b, &o)
@@ -41,6 +41,7 @@ func (e *Engine) SetOptions(o Options) {
 	if o.Jobs < 1 {
 		o.Jobs = 1
 	}
+	o.AlbumJobs = min(4, max(1, o.AlbumJobs))
 	e.opt = o
 }
 

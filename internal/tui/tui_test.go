@@ -92,12 +92,12 @@ func TestBrowseSettingsPaste(t *testing.T) {
 	if o := engine.LoadOptions(); o.Artists != "main" || o.Folders != "artist" || !o.RawTitles {
 		t.Fatalf("tag settings not saved: %+v", o)
 	}
-	m = press(m, "o", "down", "down", "down", "down", "down", "down", "down", "enter") // reorganize with nothing downloaded
+	m = press(m, "o", "down", "down", "down", "down", "down", "down", "down", "down", "enter") // reorganize with nothing downloaded
 	if m.screen != screenSources || m.run.busy || !strings.Contains(m.logs[len(m.logs)-1], "Nothing downloaded") {
 		t.Fatalf("reorganize: screen %v busy %v", m.screen, m.run.busy)
 	}
 
-	m = press(m, "o", "down", "down", "down", "down", "down", "down", "enter") // move files
+	m = press(m, "o", "down", "down", "down", "down", "down", "down", "down", "enter") // move files
 	if m.screen != screenSources || !m.run.busy || m.run.verb != "moved" {
 		t.Fatalf("move files: screen %v busy %v verb %q", m.screen, m.run.busy, m.run.verb)
 	}

@@ -14,8 +14,9 @@ import (
 )
 
 type Options struct {
-	Cookies string `json:"cookies"` // browser to read YouTube cookies from; "" = none
-	Jobs    int    `json:"jobs"`    // parallel downloads
+	Cookies   string `json:"cookies"`    // browser to read YouTube cookies from; "" = none
+	AlbumJobs int    `json:"album_jobs"` // simultaneous sources, 1 to 4
+	Jobs      int    `json:"jobs"`       // parallel downloads
 
 	// how tracks are tagged and named; "" is the default
 	Artists   string `json:"artists,omitempty"`    // "" = main artist, the rest as "(feat. …)" in the title | main | all
@@ -37,12 +38,13 @@ const (
 )
 
 type Event struct {
-	Kind      EventKind
-	ID, Title string
-	Msg       string
-	Pct       float64
-	Total     int
-	Err       error // machine-readable failure, when available
+	Kind                  EventKind
+	ID, Title             string
+	SourceID, SourceTitle string
+	Msg                   string
+	Pct                   float64
+	Total                 int
+	Err                   error // machine-readable failure, when available
 }
 
 type SourceView struct {
