@@ -110,6 +110,13 @@ func stageProbe(ctx context.Context, path string) (string, func(), error) {
 		return "", nil, err
 	}
 	defer in.Close()
+	stat, err := in.Stat()
+	if err != nil {
+		return "", nil, err
+	}
+	if err := device.RequireSpace(os.TempDir(), uint64(stat.Size())); err != nil {
+		return "", nil, err
+	}
 	out, err := os.CreateTemp("", "ytm-probe-*"+filepath.Ext(path))
 	if err != nil {
 		return "", nil, err

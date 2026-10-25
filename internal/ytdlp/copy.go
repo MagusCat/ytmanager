@@ -4,6 +4,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"ytmanager/internal/device"
 )
 
 // CopyFile copies without preserving times or permissions (MTP supports neither) and removes a
@@ -17,6 +19,13 @@ func CopyFile(src, dst string) error {
 		return err
 	}
 	defer in.Close()
+	stat, err := in.Stat()
+	if err != nil {
+		return err
+	}
+	if err := device.RequireSpace(filepath.Dir(dst), uint64(stat.Size())); err != nil {
+		return err
+	}
 	out, err := os.Create(dst)
 	if err != nil {
 		return err

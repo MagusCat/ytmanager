@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"ytmanager/internal/device"
 	"ytmanager/internal/lyrics"
 	"ytmanager/internal/manifest"
 	"ytmanager/internal/ytdlp"
@@ -35,7 +36,7 @@ func (e *Engine) track(ctx context.Context, id string, emit func(Event)) bool {
 		path, lyr, err = e.download(ctx, dl, album, n, format, root, func(p float64) {
 			emit(Event{Kind: EvProgress, ID: id, Title: title, Pct: p})
 		})
-		if err == nil || ctx.Err() != nil || ytdlp.Unavailable(err) {
+		if err == nil || ctx.Err() != nil || ytdlp.Unavailable(err) || device.IsSpaceError(err) {
 			break
 		}
 	}
@@ -50,17 +51,17 @@ func (e *Engine) track(ctx context.Context, id string, emit func(Event)) bool {
 	status, moved := t.Status, old != "" && old != t.Path && t.Status == manifest.StatusDone
 	saveErr := e.m.Save()
 	e.mu.Unlock()
-	if moved { // re-downloaded by Reorganize into a new name
+	if moved && saveErr == nil { // keep the old copy if the new path was not saved
 		removeOld(root, old)
 	}
 
 	switch {
 	case saveErr != nil:
-		emit(Event{Kind: EvFailed, ID: id, Title: title, Msg: "could not save data.music: " + saveErr.Error()})
+		emit(Event{Kind: EvFailed, ID: id, Title: title, Msg: "could not save data.music: " + saveErr.Error(), Err: saveErr})
 	case status == manifest.StatusUnavailable:
 		emit(Event{Kind: EvUnavailable, ID: id, Title: title, Msg: err.Error()})
 	case err != nil:
-		emit(Event{Kind: EvFailed, ID: id, Title: title, Msg: err.Error()})
+		emit(Event{Kind: EvFailed, ID: id, Title: title, Msg: err.Error(), Err: err})
 	default:
 		emit(Event{Kind: EvDone, ID: id, Title: title, Msg: lyr})
 	}
@@ -74,6 +75,8 @@ func record(t *manifest.Track, root, path, lyr string, err error) {
 		t.Status, t.Path, t.Lyrics, t.Error, t.Fails = manifest.StatusDone, rel, lyr, "", 0
 	case ytdlp.Unavailable(err):
 		t.Status, t.Error = manifest.StatusUnavailable, err.Error()
+	case device.IsSpaceError(err):
+		t.Status, t.Error = manifest.StatusPending, "Not enough free space; free space and sync to resume."
 	default:
 		t.Status, t.Error = manifest.StatusFailed, err.Error()
 		if !ytdlp.Transient(err) {

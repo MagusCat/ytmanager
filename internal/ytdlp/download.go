@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"ytmanager/internal/device"
 )
 
 var audioArgs = map[string][]string{
@@ -37,16 +39,23 @@ func Download(ctx context.Context, id, infoJSON, root, format, folders, cookies 
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
-	defer os.RemoveAll(stage)
 	if err != nil {
+		if !device.IsSpaceError(err) {
+			os.RemoveAll(stage)
+		}
 		return "", err
 	}
 	rel, err := filepath.Rel(stage, file)
 	if err != nil {
+		os.RemoveAll(stage)
 		return "", err
 	}
 	dst := filepath.Join(root, rel)
-	return dst, CopyFile(file, dst)
+	err = CopyFile(file, dst)
+	if !device.IsSpaceError(err) {
+		os.RemoveAll(stage)
+	}
+	return dst, err
 }
 
 // run executes yt-dlp in stage and returns the absolute path of the file it produced.

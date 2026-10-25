@@ -4,10 +4,10 @@ package device
 
 import "syscall"
 
-func Free(path string) uint64 {
+func diskSpace(path string) (SpaceInfo, error) {
 	var st syscall.Statfs_t
-	if syscall.Statfs(path, &st) != nil {
-		return 0
+	if err := syscall.Statfs(path, &st); err != nil {
+		return SpaceInfo{}, err
 	}
-	return st.Bavail * uint64(st.Bsize)
+	return SpaceInfo{Available: st.Bavail * uint64(st.Bsize), Total: st.Blocks * uint64(st.Bsize)}, nil
 }

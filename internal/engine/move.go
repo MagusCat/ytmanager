@@ -28,6 +28,9 @@ func (e *Engine) Rearrange(ctx context.Context, emit func(Event)) error {
 	}
 	e.mu.Unlock()
 	if len(ids) > 0 {
+		if err := e.checkSpace(0); err != nil {
+			return err
+		}
 		for _, tool := range []string{"ffprobe", "yt-dlp"} {
 			if _, err := exec.LookPath(tool); err != nil {
 				install := "install yt-dlp"
@@ -37,6 +40,14 @@ func (e *Engine) Rearrange(ctx context.Context, emit func(Event)) error {
 				return fmt.Errorf("cannot move files: %s is missing; %s and try again: %w", tool, install, err)
 			}
 		}
+	}
+	ctx, cancel := e.watchSpace(ctx)
+	defer cancel(nil)
+	workerEmit := func(event Event) {
+		if device.IsSpaceError(event.Err) {
+			cancel(fmt.Errorf("storage is full; free space and retry moving files: %w", event.Err))
+		}
+		emit(event)
 	}
 	emit(Event{Kind: EvPlan, Total: len(ids)})
 
@@ -51,7 +62,7 @@ func (e *Engine) Rearrange(ctx context.Context, emit func(Event)) error {
 		go func() {
 			defer wg.Done()
 			for id := range work {
-				e.worker(ctx, id, emit, e.move)
+				e.worker(ctx, id, workerEmit, e.move)
 			}
 		}()
 	}
@@ -74,7 +85,7 @@ feed:
 	if err := e.m.Save(); err != nil {
 		return err
 	}
-	return ctx.Err()
+	return context.Cause(ctx)
 }
 
 // move puts one downloaded track where the layout says; it returns false if ctx stopped it.
@@ -122,7 +133,7 @@ func (e *Engine) move(ctx context.Context, id string, emit func(Event)) bool {
 		}
 	}
 	if err != nil {
-		emit(Event{Kind: EvFailed, ID: id, Title: title, Msg: err.Error()})
+		emit(Event{Kind: EvFailed, ID: id, Title: title, Msg: err.Error(), Err: err})
 	} else {
 		emit(Event{Kind: EvDone, ID: id, Title: title})
 	}

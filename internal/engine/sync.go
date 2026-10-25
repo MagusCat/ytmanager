@@ -4,15 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
+	"time"
 
 	"ytmanager/internal/device"
-	"ytmanager/internal/manifest"
-	"ytmanager/internal/ytdlp"
 )
-
-const cookieHint = " (if it is private, set cookies in settings: o)"
 
 // Sync reads (or re-reads) every URL, stores the sources in data.music and downloads only what is
 // missing. While it runs, Add feeds more links into the same download.
@@ -30,17 +26,23 @@ func (e *Engine) Sync(ctx context.Context, urls []string, emit func(Event)) erro
 		e.mu.Unlock()
 	}()
 
-	e.schedule(ctx, urls, emit)
+	syncErr := e.schedule(ctx, urls, emit)
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if err := e.m.WritePlaylists(); err != nil {
+		if syncErr != nil {
+			return fmt.Errorf("%w; could not write playlists: %v", syncErr, err)
+		}
 		return err
 	}
 	if err := e.m.Save(); err != nil {
+		if syncErr != nil {
+			return fmt.Errorf("%w; could not save data.music: %v", syncErr, err)
+		}
 		return err
 	}
-	return ctx.Err()
+	return syncErr
 }
 
 // Add queues more links into the running sync without stopping it. It returns false when no
@@ -74,17 +76,31 @@ func (e *Engine) takeExtra(idle bool) []string {
 
 // schedule is the sync loop: Jobs workers download from a FIFO queue while new links are read in
 // the background and appended to it. It ends when nothing is queued, downloading or being read.
-func (e *Engine) schedule(ctx context.Context, urls []string, emit func(Event)) {
+func (e *Engine) schedule(parent context.Context, urls []string, emit func(Event)) error {
+	ctx, cancel := context.WithCancelCause(parent)
+	defer cancel(nil)
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
 	work := make(chan string)
 	finished := make(chan struct{})
 	listed := make(chan []string)
+	spaceFailure := make(chan error, 1)
+	workerEmit := func(event Event) {
+		if device.IsSpaceError(event.Err) {
+			select {
+			case spaceFailure <- event.Err:
+			default:
+			}
+		}
+		emit(event)
+	}
 	var wg sync.WaitGroup
 	for range e.opt.Jobs {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for id := range work {
-				e.worker(ctx, id, emit, e.track)
+				e.worker(ctx, id, workerEmit, e.track)
 				finished <- struct{}{}
 			}
 		}()
@@ -95,12 +111,18 @@ func (e *Engine) schedule(ctx context.Context, urls []string, emit func(Event)) 
 	inflight, reading, total := 0, 0, 0
 	read := func(batch []string) {
 		reading++
-		go func() { listed <- e.readSources(ctx, batch, emit) }()
+		go func() { listed <- e.readSources(ctx, batch, workerEmit) }()
 	}
 	read(urls)
 
 loop:
 	for {
+		select {
+		case err := <-spaceFailure:
+			cancel(fmt.Errorf("storage is full; free space and sync to resume: %w", err))
+			break loop
+		default:
+		}
 		if len(queue) == 0 && inflight == 0 && reading == 0 {
 			batch := e.takeExtra(true)
 			if len(batch) == 0 {
@@ -120,7 +142,12 @@ loop:
 			inflight--
 		case ids := <-listed:
 			reading--
-			if add := e.plan(ids, queued, emit); len(add) > 0 {
+			add, err := e.plan(ids, queued, emit)
+			if err != nil {
+				cancel(err)
+				break loop
+			}
+			if len(add) > 0 {
 				queue, total = append(queue, add...), total+len(add)
 				emit(Event{Kind: EvPlan, Total: total})
 			}
@@ -130,6 +157,16 @@ loop:
 			}
 		case <-ctx.Done():
 			break loop
+		case err := <-spaceFailure:
+			cancel(fmt.Errorf("storage is full; free space and sync to resume: %w", err))
+			break loop
+		case <-ticker.C:
+			if inflight > 0 || len(queue) > 0 {
+				if err := e.checkSpace(0); err != nil {
+					cancel(err)
+					break loop
+				}
+			}
 		}
 	}
 
@@ -146,6 +183,7 @@ loop:
 			workersDone = nil
 		}
 	}
+	return context.Cause(ctx)
 }
 
 // worker runs do on one track (download or move), retrying it after Resume if Pause interrupted it.
@@ -164,9 +202,9 @@ func (e *Engine) worker(ctx context.Context, id string, emit func(Event), do fun
 }
 
 // plan returns the pending tracks of these sources that are not queued yet, after checking space.
-func (e *Engine) plan(sourceIDs []string, queued map[string]bool, emit func(Event)) []string {
+func (e *Engine) plan(sourceIDs []string, queued map[string]bool, emit func(Event)) ([]string, error) {
 	if len(sourceIDs) == 0 {
-		return nil // every link failed to read; readSources already said why
+		return nil, nil // every link failed to read; readSources already said why
 	}
 	e.mu.Lock()
 	var add []string
@@ -181,15 +219,16 @@ func (e *Engine) plan(sourceIDs []string, queued map[string]bool, emit func(Even
 		if d == 0 {
 			d = 240
 		}
-		need += uint64(d * 32000) // ~256 kbps, an upper bound for every format
+		need += uint64(d*40000) + 1<<20 // ~320 kbps plus tags and cover art
 	}
 	e.mu.Unlock()
-	if free := device.Free(e.m.Root); free > 0 && need > free {
-		emit(Event{Kind: EvLog, Msg: fmt.Sprintf("✗ not enough space: needs ~%s and %s is free", Human(need), Human(free))})
-		return nil
+	if len(add) > 0 {
+		if err := e.checkSpace(need); err != nil {
+			return nil, err
+		}
 	}
 	emit(Event{Kind: EvLog, Msg: fmt.Sprintf("%s to download (~%s)", tracks(len(add)), Human(need))})
-	return add
+	return add, nil
 }
 
 func tracks(n int) string {
@@ -197,45 +236,4 @@ func tracks(n int) string {
 		return "1 track"
 	}
 	return fmt.Sprintf("%d tracks", n)
-}
-
-// readSources lists every URL with yt-dlp and merges it into the manifest; it returns the source ids.
-func (e *Engine) readSources(ctx context.Context, urls []string, emit func(Event)) []string {
-	var ids []string
-	for _, u := range urls {
-		emit(Event{Kind: EvLog, Msg: "Reading " + u})
-		l, err := ytdlp.List(ctx, u, e.opt.Cookies)
-		switch {
-		case ctx.Err() != nil:
-			return nil
-		case err != nil:
-			msg := "✗ " + u + ": " + err.Error()
-			if strings.Contains(err.Error(), "does not exist") || strings.Contains(err.Error(), "cookies") {
-				msg += cookieHint
-			}
-			emit(Event{Kind: EvLog, Msg: msg})
-			continue
-		case len(l.Entries) == 0:
-			emit(Event{Kind: EvLog, Msg: "✗ " + u + ": no tracks" + cookieHint})
-			continue
-		}
-		entries := make([]manifest.Entry, len(l.Entries))
-		for i, x := range l.Entries {
-			entries[i] = manifest.Entry{ID: x.ID, Title: x.Title, Duration: x.Duration, Unavailable: x.Unavailable}
-		}
-		e.mu.Lock()
-		src := e.m.Merge(l.Type, l.ID, l.Title, u, entries)
-		if l.Creator != "" {
-			src.Creator = l.Creator
-		}
-		err = e.m.Save()
-		e.mu.Unlock()
-		if err != nil {
-			emit(Event{Kind: EvLog, Msg: "✗ could not save data.music: " + err.Error()})
-			continue
-		}
-		ids = append(ids, src.ID)
-		emit(Event{Kind: EvLog, Msg: fmt.Sprintf("✓ %s (%s)", l.Title, tracks(len(entries)))})
-	}
-	return ids
 }

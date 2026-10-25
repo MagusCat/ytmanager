@@ -31,14 +31,14 @@ func resolveMTP(*url.URL) (string, error) {
 
 func phoneLabel(string) (string, string, bool) { return "", "", false }
 
-func Free(path string) uint64 {
+func diskSpace(path string) (SpaceInfo, error) {
 	p, err := windows.UTF16PtrFromString(path)
 	if err != nil {
-		return 0
+		return SpaceInfo{}, err
 	}
-	var avail uint64
-	if windows.GetDiskFreeSpaceEx(p, &avail, nil, nil) != nil {
-		return 0
+	var avail, total uint64
+	if err := windows.GetDiskFreeSpaceEx(p, &avail, &total, nil); err != nil {
+		return SpaceInfo{}, err
 	}
-	return avail
+	return SpaceInfo{Available: avail, Total: total}, nil
 }

@@ -42,6 +42,7 @@ type Event struct {
 	Msg       string
 	Pct       float64
 	Total     int
+	Err       error // machine-readable failure, when available
 }
 
 type SourceView struct {
@@ -62,9 +63,10 @@ type Engine struct {
 	gate *gate
 
 	// set while Sync runs; Add appends to extra and wakes the scheduler through more
-	running bool
-	extra   []string
-	more    chan struct{}
+	running    bool
+	extra      []string
+	more       chan struct{}
+	spaceCheck func(string, uint64) error // nil uses live storage checks
 }
 
 // Open loads (or creates) the destination at root, which may be ~/… or an mtp:// URI.
