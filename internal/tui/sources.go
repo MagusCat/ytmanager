@@ -35,7 +35,11 @@ func (m model) sourcesKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "a":
 		cmd = m.ask(promptURLs, "paste YouTube / YT Music links separated by spaces", "")
-	case "enter", "s":
+	case "enter":
+		if !m.run.busy && (len(srcs) > 0 || m.eng.HasPending()) {
+			cmd = m.download(m.pickedURLs(srcs))
+		}
+	case "s":
 		if !m.run.busy && len(srcs) > 0 {
 			cmd = m.sync(m.pickedURLs(srcs))
 		}
@@ -110,7 +114,11 @@ func (m model) sourcesView(b *strings.Builder, w int) {
 		rows = append(rows, dim.Render("    "+ansi.Truncate(strings.Join(strings.Fields(origin), " "), max(1, w-8), "…")))
 	}
 	if len(rows) == 0 {
-		rows = []string{dim.Render("No sources yet. Paste a playlist, album or song link to start downloading.")}
+		message := "No sources yet. Paste a playlist, album or song link to start downloading."
+		if queued := m.eng.QueuedSources(); queued > 0 {
+			message = fmt.Sprintf("%d saved source(s) waiting. Press Enter to resume.", queued)
+		}
+		rows = []string{dim.Render(message)}
 	}
 	activity := m.sourceActivity(w)
 	m.listPanel(b, w, rows, m.cursor*2, 2, strings.Count(activity, "\n"))

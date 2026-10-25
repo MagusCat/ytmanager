@@ -18,6 +18,6 @@ func (m model) help() string {
 		if m.run.busy {
 			return "↑↓ sources · paste or a add · p pause/resume · x cancel · n unavailable · o settings · q quit"
 		}
-		return "↑↓ sources · a add · enter sync · space mark · esc/c folder · d remove · n unavailable · o settings · q quit"
+		return "enter resume · s sync · a add · ↑↓ sources · space mark · esc/c folder · d remove · n unavailable · o settings · q quit"
 	}
 }

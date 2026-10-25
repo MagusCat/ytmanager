@@ -13,6 +13,10 @@ It remembers what each destination holds, so syncing again only downloads what i
   title. Older sources show their link until the next sync fills in the creator.
 - **Incremental sync**: a `data.music` file in each destination tracks every song, so nothing is
   downloaded twice and deleted files come back on the next sync.
+- **Persistent download queue**: saved unfinished tracks are resumed first. Sources are read and
+  downloaded one album or playlist at a time, with parallel song downloads inside each one.
+  Unread links survive closing the app. Adding a completed source skips its listing; an explicit
+  sync refreshes it to discover new tracks.
 - **Downloads straight to an Android phone** over MTP (Linux). Phones are detected and mounted
   automatically, and the sync resumes by itself if the cable is unplugged by accident.
 - **Tags that music apps understand**: one album artist per album, the release year, track numbers,
@@ -70,7 +74,9 @@ ytmanager ~/Music         # open a folder directly
    you are in.
 2. **Paste a link** (`ctrl+shift+v`). The download starts right away. Paste more while it runs and
    they join the queue.
-3. **Next time**, open the same destination and press `enter` to sync everything you added before.
+3. **Next time**, open the same destination and press `enter` to continue the saved queue and
+   unfinished downloads without reading completed playlists again. Press `s` to explicitly
+   synchronize your marked sources (or all sources when none is marked) and find new tracks.
 
 ### Keys
 
@@ -78,7 +84,7 @@ ytmanager ~/Music         # open a folder directly
 |--------|------|
 | Destination | `↑↓` move · `enter` browse folders · `e` type a path · `r` refresh · `q` quit |
 | Folder browser | `→` open · `←` up · `n` new folder · `u` use this folder · `esc` back |
-| Library | paste a link · `a` add links · `enter` sync · `space` mark sources to sync only those · `d` remove a source · `p` pause/resume · `x` cancel · `n` unavailable songs · `o` settings · `c` change destination · `q` quit |
+| Library | paste a link · `a` add links · `enter` resume/download · `s` sync · `space` mark sources · `d` remove a source · `p` pause/resume · `x` cancel · `n` unavailable songs · `o` settings · `c` change destination · `q` quit |
 | Unavailable songs | paste or `enter` an alternative link · `r` retry · `esc` back |
 | Settings | `↑↓` move · `←→` change · `enter` run an action · `esc` back |
 
@@ -105,7 +111,13 @@ indicator says so and actual write errors are still handled.
 ```sh
 ytmanager add  ~/Music https://music.youtube.com/playlist?list=...   # add sources and download them
 ytmanager sync ~/Music                                               # re-sync everything in data.music
+ytmanager resume ~/Music                                             # continue saved work without refreshing listings
 ```
+
+Queued tracks already known to `data.music` run before any new source is read, including during
+an explicit sync. New links join the end of the saved queue. A source that fails to list stays
+queued for the next resume while later sources can continue. Each track is attempted once per
+run (with the existing download retry); shared tracks are not queued twice.
 
 Flags, usable in both modes:
 

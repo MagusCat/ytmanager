@@ -62,11 +62,13 @@ type Engine struct {
 	opt  Options
 	gate *gate
 
-	// set while Sync runs; Add appends to extra and wakes the scheduler through more
+	// set while a download or sync runs; Add persists requests and wakes the scheduler
 	running    bool
-	extra      []string
+	accepting  bool
 	more       chan struct{}
-	spaceCheck func(string, uint64) error // nil uses live storage checks
+	spaceCheck func(string, uint64) error                                    // nil uses live storage checks
+	listSource func(context.Context, string, string) (*ytdlp.Listing, error) // nil uses yt-dlp
+	trackWork  func(context.Context, string, func(Event)) bool               // nil downloads normally
 }
 
 // Open loads (or creates) the destination at root, which may be ~/… or an mtp:// URI.
@@ -187,6 +189,9 @@ func (e *Engine) Retry(id string) error {
 func (e *Engine) Remove(id string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if source := e.m.Source(id); source != nil {
+		e.completeRequest(source.URL)
+	}
 	e.m.Remove(id)
 	return e.m.Save()
 }

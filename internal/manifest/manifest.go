@@ -43,7 +43,14 @@ type Manifest struct {
 	Format  string            `json:"format"`
 	Sources []*Source         `json:"sources"`
 	Tracks  map[string]*Track `json:"tracks"`
+	Queue   []SourceRequest   `json:"queue,omitempty"`
 	Root    string            `json:"-"`
+}
+
+// SourceRequest survives closing the app before a source has been listed.
+type SourceRequest struct {
+	URL     string `json:"url"`
+	Refresh bool   `json:"refresh,omitempty"`
 }
 
 type Entry struct {

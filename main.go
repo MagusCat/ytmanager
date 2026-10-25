@@ -25,6 +25,7 @@ func main() {
   ytmanager [flags] [destination]             TUI
   ytmanager [flags] sync <destination>        re-sync everything saved in data.music
   ytmanager [flags] add <destination> <url>…  add sources and download them
+  ytmanager [flags] resume <destination>     continue the saved download queue
 
 `)
 		flag.PrintDefaults()
@@ -43,7 +44,7 @@ func main() {
 	opt.Cookies, opt.Jobs = *cookies, *jobs
 
 	args := flag.Args()
-	if len(args) >= 2 && (args[0] == "sync" || args[0] == "add") {
+	if len(args) >= 2 && (args[0] == "sync" || args[0] == "add" || args[0] == "resume") {
 		die(headless(args[0], args[1], args[2:], *format, opt))
 		return
 	}
@@ -69,12 +70,12 @@ func headless(cmd, dest string, urls []string, format string, opt engine.Options
 			urls = append(urls, s.URL)
 		}
 	}
-	if len(urls) == 0 {
+	if len(urls) == 0 && cmd != "resume" {
 		return errors.New("no URLs: use add <destination> <url>…")
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	return eng.Sync(ctx, urls, func(e engine.Event) {
+	emit := func(e engine.Event) {
 		switch e.Kind {
 		case engine.EvLog:
 			fmt.Println(e.Msg)
@@ -85,7 +86,11 @@ func headless(cmd, dest string, urls []string, format string, opt engine.Options
 		case engine.EvUnavailable:
 			fmt.Println("-", e.Title+": unavailable; set an alternative from the TUI (n)")
 		}
-	})
+	}
+	if cmd == "sync" {
+		return eng.Sync(ctx, urls, emit)
+	}
+	return eng.Download(ctx, urls, emit)
 }
 
 func die(err error) {

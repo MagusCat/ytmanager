@@ -19,5 +19,8 @@ func (m model) spaceView(width int) string {
 		used := 100 * (1 - float64(m.space.Available)/float64(m.space.Total))
 		text += fmt.Sprintf(" · %.0f%% used", used)
 	}
+	if queued := m.eng.QueuedSources(); queued > 0 {
+		text += fmt.Sprintf(" · %d source(s) queued", queued)
+	}
 	return dim.Render(text)
 }

@@ -84,9 +84,9 @@ func (m *model) reconnect() tea.Cmd {
 	}
 	m.lost = nil
 	m.log(ok.Render("✓ " + device.Label(l.path) + " is back."))
-	if len(l.urls) == 0 {
+	if len(l.urls) == 0 && !m.eng.HasPending() {
 		return nil
 	}
 	m.log(dim.Render("Resuming the download…"))
-	return m.sync(l.urls)
+	return m.download(l.urls)
 }

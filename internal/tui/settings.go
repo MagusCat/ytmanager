@@ -121,7 +121,7 @@ func (m *model) reorganize() tea.Cmd {
 		return nil
 	}
 	m.log(dim.Render(fmt.Sprintf("Reorganizing %d tracks: each old file is replaced as its new one arrives.", n)))
-	return m.sync(urls)
+	return m.download(urls)
 }
 
 // cycle returns the value step positions away from cur in list, wrapping around.

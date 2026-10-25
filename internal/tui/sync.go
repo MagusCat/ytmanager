@@ -31,18 +31,32 @@ func (m *model) add(words []string) tea.Cmd {
 			urls = append(urls, w)
 		}
 	}
-	switch {
-	case len(urls) == 0:
+	if len(urls) == 0 {
 		m.log(bad.Render("✗ that does not look like a YouTube link"))
-	case m.run.busy && m.eng.Add(urls):
-		m.run.urls = append(m.run.urls, urls...) // so a reconnect resumes them too
-		m.log(dim.Render(fmt.Sprintf("Added %d link(s) to the current download.", len(urls))))
-	case m.run.busy: // the sync is wrapping up; start these right after it
-		m.run.queue = append(m.run.queue, urls...)
-	default:
-		return m.sync(urls)
+		return nil
 	}
-	return nil
+	if m.run.busy {
+		active, err := m.eng.Add(urls)
+		if err != nil {
+			m.fail(fmt.Errorf("could not save links in the queue: %w", err))
+			return nil
+		}
+		if active {
+			m.run.urls = append(m.run.urls, urls...)
+		} else {
+			m.run.queue = append(m.run.queue, urls...)
+		}
+		m.log(dim.Render(fmt.Sprintf("Saved %d link(s) in the download queue; completed sources are skipped.", len(urls))))
+		return nil
+	}
+	return m.download(urls)
+}
+
+func (m *model) download(urls []string) tea.Cmd {
+	eng := m.eng
+	return m.start(urls, "downloaded", func(ctx context.Context, emit func(engine.Event)) error {
+		return eng.Download(ctx, urls, emit)
+	})
 }
 
 func (m *model) sync(urls []string) tea.Cmd {
@@ -131,7 +145,7 @@ func (m *model) finish(err error) tea.Cmd {
 	if len(m.run.queue) > 0 && m.eng != nil {
 		q := m.run.queue
 		m.run.queue = nil
-		return m.sync(q)
+		return m.download(q)
 	}
 	return nil
 }
