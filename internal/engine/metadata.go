@@ -39,7 +39,8 @@ func tag(info map[string]any, album string, n int, opt Options) (artist, title s
 		info["album_artist"] = artist
 	}
 	if y, ok := info["release_year"].(float64); ok {
-		info["upload_date"] = fmt.Sprint(int(y))
+		// Keep upload_date in yt-dlp's YYYYMMDD format. Override only the audio tag.
+		info["meta_date"] = fmt.Sprint(int(y))
 	}
 	if str("genre") == "" {
 		info["genre"] = "" // stops yt-dlp falling back to the video's categories and tags

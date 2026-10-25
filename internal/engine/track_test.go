@@ -39,7 +39,7 @@ func TestTagNormalises(t *testing.T) {
 	if _, title := tag(topic, "El Último Tour Del Mundo", 2, Options{}); title != "Dákiti (feat. Jhay Cortez)" || topic["artist"] != "Bad Bunny" {
 		t.Fatalf("feat: %q %+v", title, topic)
 	}
-	if topic["album_artist"] != "Bad Bunny" || topic["upload_date"] != "2020" || topic["ytm_prefix"] != "02 - " || topic["genre"] != "" {
+	if topic["album_artist"] != "Bad Bunny" || topic["upload_date"] != "20201030" || topic["meta_date"] != "2020" || topic["ytm_prefix"] != "02 - " || topic["genre"] != "" {
 		t.Fatalf("topic: %+v", topic)
 	}
 	if _, title := tag(video, "", 0, Options{}); title != "Dákiti" || video["track"] != "Dákiti" || video["album_artist"] != "Bad Bunny" {
