@@ -35,7 +35,8 @@ func SaveOptions(o Options) error {
 	return os.WriteFile(p, b, 0o644)
 }
 
-// SetOptions changes cookies and jobs for the next Sync; do not call it while a Sync runs.
+// SetOptions changes download, tagging and folder settings for the next operation.
+// Do not call it while a sync or rearrange runs.
 func (e *Engine) SetOptions(o Options) {
 	if o.Jobs < 1 {
 		o.Jobs = 1

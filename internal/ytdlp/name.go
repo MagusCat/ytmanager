@@ -12,6 +12,17 @@ import (
 	"strings"
 )
 
+// naming makes file names valid on phones and Windows; Name must use the same flags.
+var naming = []string{"--windows-filenames", "--trim-filenames", "180"}
+
+// layouts are the output templates for each Options.Folders value.
+// The artist and flat layouts omit the album; identical artist/title pairs share a path.
+var layouts = map[string]string{
+	"":       "%(album_artist|Unknown)s/%(album|Singles)s/%(ytm_prefix|)s%(track,title)s.%(ext)s",
+	"artist": "%(album_artist|Unknown)s/%(track,title)s.%(ext)s",
+	"flat":   "%(album_artist|Unknown)s - %(track,title)s.%(ext)s",
+}
+
 // Tags reads the metadata of an audio file with ffprobe; keys are lower case.
 func Tags(ctx context.Context, path string) (map[string]string, error) {
 	out, err := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-show_entries", "format_tags:stream_tags", "-of", "json", path).Output()

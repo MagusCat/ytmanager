@@ -124,3 +124,15 @@ func relocate(src, dst string) error {
 	}
 	return os.Remove(src)
 }
+
+// removeOld deletes a track's previous file, its .lrc and the folders it leaves empty.
+func removeOld(root, rel string) {
+	p := filepath.Join(root, rel)
+	os.Remove(p)
+	os.Remove(strings.TrimSuffix(p, filepath.Ext(p)) + ".lrc")
+	for d := filepath.Dir(p); len(d) > len(root); d = filepath.Dir(d) {
+		if os.Remove(d) != nil {
+			break // not empty
+		}
+	}
+}

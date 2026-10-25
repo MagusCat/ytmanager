@@ -21,18 +21,6 @@ var audioArgs = map[string][]string{
 
 func ValidFormat(f string) bool { _, ok := audioArgs[f]; return ok }
 
-// naming makes file names valid on phones and Windows; Name must use the same flags.
-var naming = []string{"--windows-filenames", "--trim-filenames", "180"}
-
-// layouts are the output templates for each Options.Folders value.
-// shortcut: artist and flat drop the album, so two songs with the same artist and title share a
-// file; add the album or video id to the name if that happens in practice.
-var layouts = map[string]string{
-	"":       "%(album_artist|Unknown)s/%(album|Singles)s/%(ytm_prefix|)s%(track,title)s.%(ext)s",
-	"artist": "%(album_artist|Unknown)s/%(track,title)s.%(ext)s",
-	"flat":   "%(album_artist|Unknown)s - %(track,title)s.%(ext)s",
-}
-
 // Download fetches the audio of video id, described by an enriched info-json, into the folders
 // layout and returns its final path under root.
 //
@@ -119,29 +107,4 @@ func run(ctx context.Context, stage, infoJSON, format, folders, cookies string, 
 		file = filepath.Join(stage, file)
 	}
 	return file, nil
-}
-
-// CopyFile copies without preserving times or permissions (MTP supports neither) and removes a
-// partial copy on failure.
-func CopyFile(src, dst string) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(out, in)
-	if cerr := out.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		os.Remove(dst)
-	}
-	return err
 }
