@@ -2,12 +2,15 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	"ytmanager/internal/device"
 	"ytmanager/internal/manifest"
 	"ytmanager/internal/ytdlp"
 )
@@ -24,11 +27,26 @@ func (e *Engine) Rearrange(ctx context.Context, emit func(Event)) error {
 		}
 	}
 	e.mu.Unlock()
+	if len(ids) > 0 {
+		for _, tool := range []string{"ffprobe", "yt-dlp"} {
+			if _, err := exec.LookPath(tool); err != nil {
+				install := "install yt-dlp"
+				if tool == "ffprobe" {
+					install = "install ffmpeg with ffprobe"
+				}
+				return fmt.Errorf("cannot move files: %s is missing; %s and try again: %w", tool, install, err)
+			}
+		}
+	}
 	emit(Event{Kind: EvPlan, Total: len(ids)})
 
 	work := make(chan string)
 	var wg sync.WaitGroup
-	for range e.opt.Jobs {
+	jobs := e.opt.Jobs
+	if device.IsMTP(e.m.Root) {
+		jobs = 1
+	}
+	for range jobs {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -69,8 +87,26 @@ func (e *Engine) move(ctx context.Context, id string, emit func(Event)) bool {
 	emit(Event{Kind: EvStart, ID: id, Title: title})
 	src := filepath.Join(root, old)
 	tags, err := ytdlp.Tags(ctx, src)
+	if ctx.Err() == nil && (errors.Is(err, ytdlp.ErrMissingAudio) || errors.Is(err, ytdlp.ErrInvalidAudio)) {
+		// Sync restores only these tracks when the user requests it; moving never
+		// silently downloads replacements or removes the original file.
+		if _, rootErr := os.Stat(root); rootErr != nil {
+			err = fmt.Errorf("destination is unavailable; reconnect it and retry: %w", rootErr)
+		} else {
+			e.mu.Lock()
+			t.Status, t.Error = manifest.StatusPending, err.Error()
+			saveErr := e.m.Save()
+			e.mu.Unlock()
+			if saveErr != nil {
+				err = fmt.Errorf("%w; could not save repair state: %v", err, saveErr)
+			}
+		}
+	}
 	var rel string
 	if err == nil {
+		if tags["title"] == "" {
+			tags["title"] = title
+		}
 		rel, err = ytdlp.Name(ctx, tags, strings.TrimPrefix(filepath.Ext(old), "."), e.opt.Folders)
 	}
 	if ctx.Err() != nil {
@@ -116,7 +152,7 @@ func relocate(src, dst string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	if !strings.Contains(src, "/gvfs/mtp:host=") && os.Rename(src, dst) == nil {
+	if !device.IsMTP(src) && os.Rename(src, dst) == nil {
 		return nil
 	}
 	if err := ytdlp.CopyFile(src, dst); err != nil {

@@ -140,6 +140,14 @@ Songs that come from singles or playlists with no album go to `Artist/Singles/`.
   album that contains it.
 - **Copying to the phone is slow**: MTP is slow by nature. Downloading to a folder and copying it
   over in one go is faster for big libraries.
+- **Moving downloaded files fails**: use *Move files to new folders* in settings to retry. Phone
+  files are read through a temporary local copy, one at a time; keep the phone unlocked with
+  *File transfer* enabled and enough free space on the computer for one song. The error now
+  includes the reason reported by `ffprobe`.
+- **A file is missing, empty or cannot be decoded**: moving leaves existing audio untouched and
+  marks that track pending. Press `enter` in the library to restore those tracks, then retry
+  *Move files to new folders*. Other downloaded tracks are kept.
+- **`ffprobe` is missing**: install the `ffmpeg` package with `ffprobe` and restart ytmanager.
 
 ## Platforms
 

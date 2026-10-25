@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 var (
@@ -48,7 +49,9 @@ func (m model) footer(b *strings.Builder, help string) {
 	if len(m.logs) > 0 {
 		b.WriteString("\n")
 		for _, l := range m.logs {
-			b.WriteString(dim.Render("  "+l) + "\n")
+			for _, line := range strings.Split(ansi.Wrap(l, max(20, m.width-6), ""), "\n") {
+				b.WriteString(dim.Render("  "+line) + "\n")
+			}
 		}
 	}
 	if m.prompt != promptNone {

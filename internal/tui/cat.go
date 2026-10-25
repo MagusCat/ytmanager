@@ -76,7 +76,7 @@ func (m model) catView(w int) string {
 	case time.Now().Before(m.cat.moodUntil):
 		face, say = "happy", "All done!"
 		if m.cat.sad {
-			face, say = "sad", "Some tracks failed; sync again to retry them."
+			face, say = "sad", "Some tracks failed. Check the error messages."
 		}
 	}
 

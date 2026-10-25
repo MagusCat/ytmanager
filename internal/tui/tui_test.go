@@ -8,6 +8,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"ytmanager/internal/device"
 	"ytmanager/internal/engine"
@@ -39,6 +41,23 @@ func paste(m model, s string) model {
 func TestCutLeft(t *testing.T) {
 	if got := cutLeft("abcdefgh", 5); got != "…efgh" {
 		t.Errorf("cutLeft = %q", got)
+	}
+}
+
+func TestFooterWrapsRecoveryInstructions(t *testing.T) {
+	m := newModel()
+	m.width = 48
+	m.log(bad.Render("✗ " + strings.Repeat("音楽", 10) + ": file is missing; sync (Enter) to restore it"))
+	var b strings.Builder
+	m.footer(&b, "")
+	plain := ansi.Strip(b.String())
+	if !strings.Contains(strings.Join(strings.Fields(plain), " "), "sync (Enter) to restore it") {
+		t.Fatalf("recovery action lost: %s", plain)
+	}
+	for _, line := range strings.Split(plain, "\n") {
+		if lipgloss.Width(line) > m.width-4 {
+			t.Errorf("error overflows terminal: %q", line)
+		}
 	}
 }
 

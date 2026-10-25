@@ -14,6 +14,11 @@ type Mount struct {
 	Free uint64 // bytes available; 0 when unknown
 }
 
+// IsMTP reports whether a path belongs to a gvfs phone mount.
+func IsMTP(path string) bool {
+	return strings.Contains(filepath.ToSlash(path), "/gvfs/mtp:host=")
+}
+
 // List returns ~/Music followed by every removable drive and phone storage found.
 func List() []Mount {
 	var paths []string
