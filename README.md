@@ -235,3 +235,11 @@ time. Saved pending downloads still finish before new links are read.
 
 Active sources show `downloading`; the activity area names the albums and each
 track's source. For the CLI: `ytmanager -albums 2 -jobs 4 resume <destination>`.
+
+### Download errors
+
+`exit status 1` only means that an external program failed. The app now includes
+its diagnostic output and identifies whether it failed while reading song information
+or downloading/processing audio. Recognized errors include a suggested next step.
+Unknown errors stay retryable; press Enter to resume after fixing the cause.
+Songs previously marked unavailable can be retried from `n` with `r`.

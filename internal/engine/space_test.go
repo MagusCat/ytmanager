@@ -20,7 +20,7 @@ import (
 func TestStorageFailuresStayPending(t *testing.T) {
 	for _, err := range []error{device.ErrLowSpace, syscall.ENOSPC, errors.New("ffmpeg: No space left on device")} {
 		track := &manifest.Track{Path: "old.opus", Status: manifest.StatusDone}
-		for range maxFails + 1 {
+		for range 4 {
 			record(track, "/root", "", "", err)
 		}
 		if track.Status != manifest.StatusPending || track.Fails != 0 || track.Path != "old.opus" {

@@ -109,7 +109,7 @@ func (m *model) apply(e engine.Event) {
 			m.log(bad.Render("✗ " + e.Title + ": " + e.Msg))
 		case engine.EvUnavailable:
 			r.unavailable++
-			m.log(dim.Render("- " + e.Title + ": unavailable (n to set an alternative)"))
+			m.log(dim.Render("- " + e.Title + ": " + e.Msg + " (n to retry or set an alternative)"))
 		}
 		delete(r.jobs, e.ID)
 		for i, id := range r.order {

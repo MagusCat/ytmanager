@@ -3,7 +3,6 @@ package ytdlp
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -75,19 +74,24 @@ func run(ctx context.Context, stage, infoJSON, format, folders, cookies string, 
 	args = append(append(args, naming...), audioArgs[format]...)
 
 	pr, pw := io.Pipe()
+	defer pr.Close()
+	defer pw.Close()
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 	cmd.Dir = stage
 	cmd.Stdout, cmd.Stderr = pw, pw
 	if err := cmd.Start(); err != nil {
-		return "", err
+		return "", processError(err, "could not start yt-dlp")
 	}
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait(); pw.Close() }()
 
-	var file, errLine string
+	var file string
+	var diagnostic diagnostic
 	sc := bufio.NewScanner(pr)
+	sc.Buffer(make([]byte, 64*1024), 1024*1024)
 	for sc.Scan() {
 		line := sc.Text()
+		diagnostic.add(line)
 		switch {
 		case strings.HasPrefix(line, "PROG "):
 			if f := strings.Fields(line); len(f) == 3 {
@@ -99,15 +103,21 @@ func run(ctx context.Context, stage, infoJSON, format, folders, cookies string, 
 			}
 		case strings.HasPrefix(line, "FILE "):
 			file = strings.TrimPrefix(line, "FILE ")
-		case strings.HasPrefix(line, "ERROR:"):
-			errLine = line
 		}
 	}
-	if err := <-done; err != nil {
-		if errLine != "" {
-			return "", errors.New(strings.TrimPrefix(errLine, "ERROR: "))
-		}
-		return "", err
+	scanErr := sc.Err()
+	if scanErr != nil {
+		_, _ = io.Copy(io.Discard, pr)
+	} // let the child finish even after an oversized line
+	err := <-done
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	if err != nil {
+		return "", processError(err, diagnostic.detail())
+	}
+	if scanErr != nil {
+		return "", fmt.Errorf("could not read yt-dlp output: %w", scanErr)
 	}
 	if file == "" {
 		return "", fmt.Errorf("yt-dlp did not report the final file")

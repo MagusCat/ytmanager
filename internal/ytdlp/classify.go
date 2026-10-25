@@ -32,7 +32,7 @@ func contains(err error, patterns []string) bool {
 }
 
 // Unavailable reports whether a yt-dlp error is known to be permanent (video removed, private,
-// blocked). Unknown permanent errors are caught by the engine after repeated failures.
+// blocked). Unknown failures remain retryable.
 func Unavailable(err error) bool {
 	return contains(err, []string{
 		"video unavailable", "video is unavailable", "this video is not available",

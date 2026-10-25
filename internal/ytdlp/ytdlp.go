@@ -48,21 +48,22 @@ func base(cookies string) []string {
 
 func output(ctx context.Context, args ...string) ([]byte, error) {
 	out, err := exec.CommandContext(ctx, "yt-dlp", args...).Output()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {
-		return nil, errors.New(lastErr(string(ee.Stderr)))
+		return nil, processError(err, lastErr(string(ee.Stderr)))
 	}
 	return out, err
 }
 
 func lastErr(stderr string) string {
-	lines := strings.Split(strings.TrimSpace(stderr), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.HasPrefix(lines[i], "ERROR:") {
-			return strings.TrimPrefix(lines[i], "ERROR: ")
-		}
+	var d diagnostic
+	for _, line := range strings.Split(stderr, "\n") {
+		d.add(line)
 	}
-	return lines[len(lines)-1]
+	return d.detail()
 }
 
 func List(ctx context.Context, url, cookies string) (*Listing, error) {

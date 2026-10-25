@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,10 +13,6 @@ import (
 	"ytmanager/internal/manifest"
 	"ytmanager/internal/ytdlp"
 )
-
-// maxFails is how many syncs in a row a track may fail with an unrecognised, non-network error
-// before it is treated as unavailable.
-const maxFails = 3
 
 // track downloads one track and records the result; it returns false if ctx stopped it midway.
 func (e *Engine) track(ctx context.Context, id string, emit func(Event)) bool {
@@ -80,9 +77,7 @@ func record(t *manifest.Track, root, path, lyr string, err error) {
 	default:
 		t.Status, t.Error = manifest.StatusFailed, err.Error()
 		if !ytdlp.Transient(err) {
-			if t.Fails++; t.Fails >= maxFails {
-				t.Status = manifest.StatusUnavailable
-			}
+			t.Fails++ // an unknown failure does not prove that a video is unavailable
 		}
 	}
 }
@@ -91,7 +86,7 @@ func record(t *manifest.Track, root, path, lyr string, err error) {
 func (e *Engine) download(ctx context.Context, id, album string, n int, format, root string, progress func(float64)) (string, string, error) {
 	info, err := ytdlp.Info(ctx, id, e.opt.Cookies)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("reading song information: %w", err)
 	}
 	artist, title := tag(info, album, n, e.opt)
 	dur, _ := info["duration"].(float64)
@@ -115,7 +110,7 @@ func (e *Engine) download(ctx context.Context, id, album string, n int, format, 
 
 	path, err := ytdlp.Download(ctx, id, tmp.Name(), root, format, e.opt.Folders, e.opt.Cookies, progress)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("downloading or processing audio: %w", err)
 	}
 	kind := ""
 	if hasLyr {
