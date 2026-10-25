@@ -1,0 +1,186 @@
+# ytmanager
+
+A terminal app that keeps a music library downloaded from YouTube and YT Music: playlists, albums,
+mixes and single songs. It saves them to a folder, a USB drive or straight to an Android phone,
+with clean tags, cover art and lyrics, so they look right in any music player.
+
+It remembers what each destination holds, so syncing again only downloads what is new.
+
+## Features
+
+- **Playlists, albums, mixes and songs** from YouTube or YT Music. Paste a link and it starts.
+- **Recognizable sources**: each source shows its artist, channel or playlist creator below the
+  title. Older sources show their link until the next sync fills in the creator.
+- **Incremental sync**: a `data.music` file in each destination tracks every song, so nothing is
+  downloaded twice and deleted files come back on the next sync.
+- **Downloads straight to an Android phone** over MTP (Linux). Phones are detected and mounted
+  automatically, and the sync resumes by itself if the cable is unplugged by accident.
+- **Tags that music apps understand**: one album artist per album, the release year, track numbers,
+  square cover art, and clean titles ("Artist - Song (Official Video)" becomes "Song").
+- **Lyrics**: synced lyrics from [LRCLIB](https://lrclib.net) (saved as a `.lrc` file and embedded),
+  falling back to the plain lyrics from YT Music.
+- **`.m3u8` playlists** for every playlist and album, with relative paths that work on phones and
+  car stereos.
+- **Private playlists and Liked Music**: reads the YouTube cookies from your browser.
+- **Unavailable songs** are marked and skipped. You can give them an alternative (a song, album or
+  playlist link) and ytmanager picks the closest match.
+- **Pause, resume, cancel**, and add more links while a download is running.
+- **Reorganize anytime**: change the folder layout and move what is already downloaded, without
+  downloading it again.
+- A cat that keeps you company while it downloads.
+
+## Requirements
+
+| Tool | Why |
+|------|-----|
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp#installation) | Lists and downloads from YouTube. Keep it up to date: YouTube changes often. |
+| [ffmpeg](https://ffmpeg.org/download.html) (with `ffprobe`) | Converts the audio and writes tags and covers. |
+| [Go](https://go.dev/dl/) 1.24 or newer | Only to build ytmanager. |
+| gvfs (`gio`) | Only to download to an Android phone on Linux. Most desktops already have it. |
+
+```sh
+# Arch / CachyOS
+sudo pacman -S yt-dlp ffmpeg go
+# Debian / Ubuntu (the packaged yt-dlp is often outdated; prefer pipx)
+sudo apt install ffmpeg golang && pipx install yt-dlp
+# macOS
+brew install yt-dlp ffmpeg go
+```
+
+## Install
+
+```sh
+git clone https://github.com/MagusCat/ytmanager.git
+cd ytmanager
+go build -o ytmanager .
+sudo mv ytmanager /usr/local/bin/   # optional
+```
+
+## Usage
+
+### Interactive (TUI)
+
+```sh
+ytmanager                 # pick a destination from the list
+ytmanager ~/Music         # open a folder directly
+```
+
+1. **Pick where the music goes.** The first screen lists your music folder, USB drives and
+   connected phones. Press `enter` to browse its folders, `n` to create one, `u` to use the folder
+   you are in.
+2. **Paste a link** (`ctrl+shift+v`). The download starts right away. Paste more while it runs and
+   they join the queue.
+3. **Next time**, open the same destination and press `enter` to sync everything you added before.
+
+### Keys
+
+| Screen | Keys |
+|--------|------|
+| Destination | `↑↓` move · `enter` browse folders · `e` type a path · `r` refresh · `q` quit |
+| Folder browser | `→` open · `←` up · `n` new folder · `u` use this folder · `esc` back |
+| Library | paste a link · `a` add links · `enter` sync · `space` mark sources to sync only those · `d` remove a source · `p` pause/resume · `x` cancel · `n` unavailable songs · `o` settings · `c` change destination · `q` quit |
+| Unavailable songs | paste or `enter` an alternative link · `r` retry · `esc` back |
+| Settings | `↑↓` move · `←→` change · `enter` run an action · `esc` back |
+
+### Headless (scripts, cron)
+
+```sh
+ytmanager add  ~/Music https://music.youtube.com/playlist?list=...   # add sources and download them
+ytmanager sync ~/Music                                               # re-sync everything in data.music
+```
+
+Flags, usable in both modes:
+
+| Flag | Default | |
+|------|---------|---|
+| `-format` | `opus` | `opus`, `m4a` or `mp3`. Saved per destination. |
+| `-jobs` | `3` | Parallel downloads. |
+| `-cookies` | none | Browser to read cookies from: `firefox`, `chrome`, `chromium`, `brave`, `edge`, `vivaldi`, `opera`. |
+
+Destinations can also be given as `mtp://<phone>/<storage>/Music`.
+
+## Settings
+
+Press `o` in the library. Everything except the format is saved in
+`~/.config/ytmanager/config.json` and applies to every destination.
+
+| Setting | Options |
+|---------|---------|
+| Format | `opus` (smallest, best quality), `m4a` (Apple devices), `mp3` (old car stereos) |
+| Parallel downloads | 1 to 8 |
+| Browser cookies | Needed for private playlists and Liked Music. Log in to YouTube in that browser first. |
+| Artists | `feat. in title`: "Song (feat. B)" by "A" (default) · `main only` · `all in artist`: "A, B" |
+| Folders | `Artist/Album/01 - Song` (default) · `Artist/Song` · `Artist - Song` with no folders |
+| Video titles | `clean` (default) or `as uploaded` |
+| Move files to new folders | Applies the Folders setting to what is already downloaded, without downloading. |
+| Download everything again | Applies every setting, including format, artists and titles. Each old file is replaced as its new one arrives. |
+
+## What a destination looks like
+
+```
+Music/
+├── data.music                 # what ytmanager knows about this destination
+├── Liked Music.m3u8           # one playlist file per source
+└── Bad Bunny/
+    └── Un Verano Sin Ti/
+        ├── 01 - Moscow Mule.opus
+        └── 01 - Moscow Mule.lrc
+```
+
+Songs that come from singles or playlists with no album go to `Artist/Singles/`.
+
+## Tips and troubleshooting
+
+- **Liked Music (`list=LM`) shows 0 tracks**: it is private. Set *Browser cookies* in settings to a
+  browser where you are logged in to YouTube.
+- **Downloads fail suddenly**: update yt-dlp (`yt-dlp -U`, or update it with your package manager).
+- **The phone does not appear**: unlock it and choose *File transfer* in the USB notification, then
+  press `r`.
+- **A song is unavailable**: open `n`, paste a link to another upload of the same song, or to the
+  album that contains it.
+- **Copying to the phone is slow**: MTP is slow by nature. Downloading to a folder and copying it
+  over in one go is faster for big libraries.
+
+## Platforms
+
+| | Folders and USB drives | Android phone (MTP) |
+|---|---|---|
+| Linux | yes | yes, through gvfs |
+| macOS | yes | no: download to a folder and copy it over |
+| Windows | yes | no: download to a folder and copy it over |
+
+## How it works
+
+ytmanager is a Go program built with [Bubble Tea](https://github.com/charmbracelet/bubbletea).
+It drives `yt-dlp` and `ffmpeg` as external programs.
+
+```
+main.go               flags, headless sync/add, starts the TUI
+internal/
+├── tui/              screens: destinations, folder browser, library, settings, unavailable songs, cat
+├── engine/           the sync: download queue and workers, pause, tag normalisation, moving files
+├── ytdlp/            wraps yt-dlp and ffprobe: list links, read metadata, download, name files
+├── manifest/         data.music and the .m3u8 playlists
+├── lyrics/           LRCLIB and YT Music lyrics
+└── device/           destinations: music folder, USB drives, MTP phones, free space
+```
+
+For each song, the engine:
+
+1. reads its full metadata with yt-dlp;
+2. fixes the tags (album artist, year, album and track number, title);
+3. looks up the lyrics;
+4. hands everything to yt-dlp, which downloads, converts and tags the file in a temporary folder;
+5. copies the result to the destination, which also works over MTP;
+6. records the song in `data.music`, so the next sync skips it.
+
+Run the tests with:
+
+```sh
+go test ./...
+```
+
+## Disclaimer
+
+Download only content you have the right to download, and respect YouTube's Terms of Service and
+the copyright laws of your country. This project is not affiliated with YouTube or Google.
