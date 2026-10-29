@@ -12,14 +12,12 @@
   <img src="https://img.shields.io/badge/platform-linux%20%7C%20macOS%20%7C%20windows-lightgrey" alt="Platforms: Linux, macOS, Windows">
 </p>
 
-ytmanager is a terminal app that downloads playlists, albums, mixes and songs from YouTube and
-YT Music to a folder, a USB drive or straight to an Android phone, with clean tags, cover art,
-lyrics and playlists that look right in any music player. It remembers what each destination
-holds, so syncing again only downloads what is new.
+ytmanager is a app that downloads playlists, albums, mixes and songs from YouTube and
+YT Music with clean tags, cover art, lyrics and playlists that look right in any music player. It remembers what each destination holds, so syncing again only downloads what is new.
 
 ## Screenshots
 
-**Start screen**: pick a music folder, USB drive or phone.
+**Start screen**: pick a music folder.
 
 ![Start screen listing destinations with their free space](docs/screenshots/menu.png)
 
@@ -46,8 +44,6 @@ holds, so syncing again only downloads what is new.
 ## Features
 
 - **Paste a link and it downloads**: playlists, albums, mixes and songs from YouTube or YT Music.
-- **Only what is new**: each destination remembers its songs, so syncing again skips them.
-- **Folder, USB drive or Android phone** (MTP on Linux), detected automatically.
 - **Clean tags**: album artist, year, track numbers, cover art and titles without
   "(Official Video)". Music videos are swapped for their YT Music audio track.
 - **Lyrics** from [LRCLIB](https://lrclib.net) and YT Music, plus `.m3u8` playlists for every source.
@@ -84,7 +80,7 @@ ytmanager            # choose a destination on the start screen
 ytmanager ~/Music    # open a folder directly
 ```
 
-1. **Pick where the music goes**: your music folder, a USB drive or a phone.
+1. **Pick where the music goes**: your music folder.
 2. **Paste a link** (`ctrl+shift+v`). It starts right away; paste more to queue them.
 3. **Next time**, open the same destination: `enter` continues pending downloads, `s` fetches new
    songs from your sources.
@@ -115,12 +111,12 @@ Flags: `-format opus|m4a|mp3`, `-jobs 3`, `-albums 1`, `-cookies <browser>`.
 
 ```
 Music/
-├── data.music              # what ytmanager knows about this destination
+├── data.music              
 ├── Liked Music.m3u8
-└── Bad Bunny/
-    └── Un Verano Sin Ti/
-        ├── 01 - Moscow Mule.opus
-        └── 01 - Moscow Mule.lrc
+└── Artist/
+    └── Album/
+        ├── 01.opus
+        └── 01.lrc
 ```
 
 ## Settings
