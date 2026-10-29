@@ -45,7 +45,7 @@ func main() {
 	opt.Cookies, opt.Jobs, opt.AlbumJobs = *cookies, *jobs, *albums
 
 	args := flag.Args()
-	if len(args) >= 2 && (args[0] == "sync" || args[0] == "add" || args[0] == "resume") {
+	if len(args) >= 2 && (args[0] == "sync" || args[0] == "add" || args[0] == "resume" || args[0] == "repair") {
 		die(headless(args[0], args[1], args[2:], *format, opt))
 		return
 	}
@@ -71,7 +71,7 @@ func headless(cmd, dest string, urls []string, format string, opt engine.Options
 			urls = append(urls, s.URL)
 		}
 	}
-	if len(urls) == 0 && cmd != "resume" {
+	if len(urls) == 0 && cmd != "resume" && cmd != "repair" {
 		return errors.New("no URLs: use add <destination> <url>…")
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -87,6 +87,9 @@ func headless(cmd, dest string, urls []string, format string, opt engine.Options
 		case engine.EvUnavailable:
 			fmt.Println("-", e.Title+": unavailable; set an alternative from the TUI (n)")
 		}
+	}
+	if cmd == "repair" {
+		return eng.Repair(ctx, emit)
 	}
 	if cmd == "sync" {
 		return eng.Sync(ctx, urls, emit)

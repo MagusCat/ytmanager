@@ -66,11 +66,14 @@ func (m *model) altResolved(msg altMsg) tea.Cmd {
 
 func (m model) missingView(b *strings.Builder, w int) {
 	list := m.eng.Missing()
-	header(b, dim.Render(fmt.Sprintf("%d unavailable", len(list))))
+	header(b, dim.Render(fmt.Sprintf("%d need an alternative or retry", len(list))))
 	half := max(10, w/2)
 	var rows []string
 	for i, x := range list {
 		note := x.Source
+		if x.Error != "" {
+			note = x.Error
+		}
 		if x.Alt != "" {
 			note = "the alternative is unavailable too"
 		}

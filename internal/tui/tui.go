@@ -6,6 +6,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
@@ -23,6 +24,7 @@ const (
 	screenBrowse                 // pick a folder inside it
 	screenSources                // a destination is open: sources and downloads
 	screenSettings               // download settings
+	screenLibrary                // search and manage downloaded music
 	screenMissing                // unavailable tracks and their alternatives
 )
 
@@ -38,11 +40,12 @@ const (
 )
 
 type model struct {
-	opt    engine.Options
-	format string // -format flag, applied to every destination opened
-	screen screen
-	eng    *engine.Engine // nil on screenDevices and screenBrowse
-	cursor int
+	opt     engine.Options
+	format  string // -format flag, applied to every destination opened
+	screen  screen
+	eng     *engine.Engine // nil on screenDevices and screenBrowse
+	cursor  int
+	library libraryState
 
 	mounts        []device.Mount
 	browse        string // folder shown in screenBrowse
@@ -145,6 +148,31 @@ func (m model) Init() tea.Cmd {
 }
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case libraryScannedMsg:
+		if msg.eng == m.eng {
+			m.library.scanning = false
+			m.library.cancel = nil
+			m.library.all = msg.tracks
+			m.library.marked = map[string]bool{}
+			m.cursor = 0
+			if msg.err != nil {
+				m.fail(msg.err)
+			}
+			m.log(fmt.Sprintf("Scanned %d audio files. External files are review-only.", len(msg.tracks)))
+		}
+		return m, nil
+	case libraryDeletedMsg:
+		if msg.eng == m.eng {
+			m.library.busy = false
+			m.library.all = msg.tracks
+			m.library.marked = map[string]bool{}
+			m.cursor = 0
+			m.log(fmt.Sprintf("Deleted %d track(s).", msg.count))
+			if msg.err != nil {
+				m.fail(msg.err)
+			}
+		}
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.bar.Width = max(10, min(30, msg.Width/4))
@@ -205,6 +233,7 @@ func (m *model) openDest(p string) error {
 	}
 	m.eng, m.screen, m.cursor, m.logs = eng, screenSources, 0, nil
 	m.logScroll = 0
+	m.library = libraryState{}
 	m.browseReturn = false
 	m.space, err = device.Space(eng.Root())
 	m.spaceKnown = err == nil

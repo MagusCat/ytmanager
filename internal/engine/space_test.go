@@ -108,6 +108,7 @@ func TestSyncStopsWhenSpaceDropsDuringDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	var checks atomic.Int32
+	e.resolveSong = func(_ context.Context, id string) (string, error) { return id, nil }
 	e.spaceCheck = func(string, uint64) error {
 		if checks.Add(1) > 2 { // planning succeeds; the next runtime check fails
 			return device.ErrLowSpace

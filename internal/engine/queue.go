@@ -57,7 +57,7 @@ func (e *Engine) sourceSettled(source *manifest.Source) bool {
 	}
 	for _, id := range source.Tracks {
 		track := e.m.Tracks[id]
-		if track == nil || (track.Status != manifest.StatusDone && track.Status != manifest.StatusUnavailable) {
+		if track == nil || (track.Status != manifest.StatusDone && track.Status != manifest.StatusUnavailable && track.Status != manifest.StatusRemoved) {
 			return false
 		}
 	}
@@ -130,7 +130,7 @@ func (e *Engine) pendingSources() []string {
 	var ids []string
 	for _, source := range e.m.Sources {
 		for _, id := range source.Tracks {
-			if track := e.m.Tracks[id]; track != nil && track.Status != manifest.StatusDone && track.Status != manifest.StatusUnavailable {
+			if track := e.m.Tracks[id]; track != nil && track.Status != manifest.StatusDone && track.Status != manifest.StatusUnavailable && track.Status != manifest.StatusRemoved {
 				ids = append(ids, source.ID)
 				break
 			}

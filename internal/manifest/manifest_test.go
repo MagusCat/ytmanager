@@ -24,7 +24,7 @@ func TestMergePendingSave(t *testing.T) {
 		t.Fatalf("AlbumOf = %q %d", album, n)
 	}
 
-	os.WriteFile(filepath.Join(root, "a.opus"), nil, 0o644)
+	os.WriteFile(filepath.Join(root, "a.opus"), []byte("audio"), 0o644)
 	m.Tracks["a"].Status, m.Tracks["a"].Path = "done", "a.opus"
 	m.Tracks["b"].Status, m.Tracks["b"].Path = "done", "borrado.opus" // missing file => downloaded again
 	if got := m.Pending([]string{"PL1"}); len(got) != 1 || got[0] != "b" {
@@ -93,5 +93,18 @@ func TestLoadFallsBackToBackup(t *testing.T) {
 	got, err := Load(root)
 	if err != nil || got.Format != "mp3" {
 		t.Fatalf("Load = %+v, %v", got, err)
+	}
+}
+
+func TestExistingAudioCaseAndEmpty(t *testing.T) {
+	root := t.TempDir()
+	os.Mkdir(filepath.Join(root, "Artist"), 0755)
+	os.WriteFile(filepath.Join(root, "Artist", "Song.opus"), []byte("audio"), 0644)
+	if got := existingAudioPath(root, "artist/song.opus"); got != filepath.Join("Artist", "Song.opus") {
+		t.Fatalf("case resolution: %q", got)
+	}
+	os.WriteFile(filepath.Join(root, "empty.opus"), nil, 0644)
+	if existingAudioPath(root, "empty.opus") != "" {
+		t.Fatal("accepted empty audio")
 	}
 }

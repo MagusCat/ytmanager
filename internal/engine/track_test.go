@@ -34,7 +34,7 @@ func TestRecordFails(t *testing.T) {
 func TestTagNormalises(t *testing.T) {
 	topic := map[string]any{"uploader": "Bad Bunny - Topic", "artist": "Bad Bunny, Jhay Cortez",
 		"artists": []any{"Bad Bunny", "Jhay Cortez"}, "track": "Dákiti", "release_year": 2020.0, "upload_date": "20201030"}
-	video := map[string]any{"uploader": "Bad Bunny", "title": "Bad Bunny - Dákiti (Official Video)", "tags": []any{"reggaeton"}}
+	video := map[string]any{"uploader": "Video Channel", "artist": "Bad Bunny", "title": "Bad Bunny - Dákiti (Official Video)", "tags": []any{"reggaeton"}}
 
 	if _, title := tag(topic, "El Último Tour Del Mundo", 2, Options{}); title != "Dákiti (feat. Jhay Cortez)" || topic["artist"] != "Bad Bunny" {
 		t.Fatalf("feat: %q %+v", title, topic)

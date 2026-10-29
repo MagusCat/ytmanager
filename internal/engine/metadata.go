@@ -18,26 +18,22 @@ var videoNoise = regexp.MustCompile(`(?i)\s*[\(\[](official|lyric|audio|video|vi
 func tag(info map[string]any, album string, n int, opt Options) (artist, title string) {
 	str := func(k string) string { s, _ := info[k].(string); return s }
 
-	var all []string
-	if as, ok := info["artists"].([]any); ok {
-		for _, a := range as {
-			if a, ok := a.(string); ok {
-				all = append(all, a)
-			}
-		}
-	}
-	artist = strings.TrimSuffix(str("uploader"), " - Topic")
+	all := creditedArtists(info)
+	artist = "Unknown Artist"
 	if len(all) > 0 {
 		artist = all[0]
-	} else if a := str("artist"); a != "" {
-		artist = a
 	}
-	if opt.Artists != "all" || str("artist") == "" {
-		info["artist"] = artist
+	info["artist"] = artist
+	if opt.Artists == "all" && len(all) > 0 {
+		info["artist"] = strings.Join(all, ", ")
 	}
-	if str("album_artist") == "" {
-		info["album_artist"] = artist
+	albumArtist := cleanArtist(str("album_artist"))
+	// Keep explicit album credits, including compilations and guest tracks.
+	// When absent, derive the folder artist from music credits, never the channel.
+	if albumArtist == "" {
+		albumArtist = artist
 	}
+	info["album_artist"] = albumArtist
 	if y, ok := info["release_year"].(float64); ok {
 		// Keep upload_date in yt-dlp's YYYYMMDD format. Override only the audio tag.
 		info["meta_date"] = fmt.Sprint(int(y))
@@ -67,4 +63,62 @@ func tag(info map[string]any, album string, n int, opt Options) (artist, title s
 	}
 	info["track"] = title
 	return artist, title
+}
+
+func cleanArtist(s string) string {
+	return strings.Join(strings.Fields(strings.TrimSuffix(strings.TrimSpace(s), " - Topic")), " ")
+}
+
+// creditedArtists never splits names on commas or '&': those can be part of a
+// band's name. Only a structured list identifies separate collaborators safely.
+func creditedArtists(info map[string]any) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(name string) {
+		name = cleanArtist(name)
+		key := strings.ToLower(name)
+		if name != "" && !seen[key] {
+			out = append(out, name)
+			seen[key] = true
+		}
+	}
+	switch artists := info["artists"].(type) {
+	case []any:
+		for _, value := range artists {
+			if name, ok := value.(string); ok {
+				add(name)
+			}
+		}
+	case []string:
+		for _, name := range artists {
+			add(name)
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	if artist, _ := info["artist"].(string); strings.TrimSpace(artist) != "" {
+		add(artist)
+		if len(out) > 0 {
+			return out
+		}
+	}
+	if albumArtist, _ := info["album_artist"].(string); strings.TrimSpace(albumArtist) != "" {
+		add(albumArtist)
+		if len(out) > 0 {
+			return out
+		}
+	}
+	// YouTube's auto-generated Topic channels are the only channel fallback.
+	// Label, VEVO and fan-upload channel names are not artist credits.
+	for _, key := range []string{"channel", "uploader"} {
+		name, _ := info[key].(string)
+		if strings.HasSuffix(strings.TrimSpace(name), " - Topic") {
+			add(name)
+			if len(out) > 0 {
+				return out
+			}
+		}
+	}
+	return out
 }

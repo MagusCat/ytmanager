@@ -6,6 +6,19 @@ func (m model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if k.String() == "ctrl+c" {
 		return m, tea.Quit
 	}
+	if m.run.busy && (m.run.verb == "repaired" || m.run.verb == "exported") {
+		if k.String() == "x" {
+			m.run.cancel()
+		}
+		if k.String() == "q" {
+			m.run.cancel()
+			return m, tea.Quit
+		}
+		return m, nil
+	}
+	if m.screen == screenLibrary {
+		return m.libraryKey(k)
+	}
 	if m.prompt != promptNone {
 		return m.promptKey(k)
 	}

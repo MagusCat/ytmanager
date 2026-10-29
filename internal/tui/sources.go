@@ -39,6 +39,14 @@ func (m model) sourcesKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !m.run.busy && (len(srcs) > 0 || m.eng.HasPending()) {
 			cmd = m.download(m.pickedURLs(srcs))
 		}
+	case "r":
+		if !m.run.busy {
+			cmd = m.start(nil, "repaired", m.eng.Repair)
+		}
+	case "e":
+		if !m.run.busy {
+			cmd = m.start(nil, "exported", m.eng.ExportM3U)
+		}
 	case "s":
 		if !m.run.busy && len(srcs) > 0 {
 			cmd = m.sync(m.pickedURLs(srcs))
@@ -57,6 +65,13 @@ func (m model) sourcesKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.cursor = max(0, min(m.cursor, len(srcs)-2))
 		}
+	case "l":
+		if m.run.busy {
+			m.log(dim.Render("Wait for downloads to finish or cancel them before managing music."))
+			break
+		}
+		m.library = libraryState{all: m.eng.Library(), marked: map[string]bool{}}
+		m.screen, m.cursor = screenLibrary, 0
 	case "o":
 		m.screen, m.cursor = screenSettings, 0
 	case "n":
@@ -89,6 +104,9 @@ func (m model) sourcesView(b *strings.Builder, w int) {
 	}
 	b.WriteString(logo.Render("ytmanager") + " " + cutLeft(device.Label(m.eng.Root()), max(10, w-35)) + dim.Render(info) + "\n")
 	b.WriteString(m.spaceView(w) + "\n")
+	if m.terminalHeight() >= 24 {
+		b.WriteString("\n" + hi.Render("SOURCES") + "\n")
+	}
 
 	var rows []string
 	for i, s := range m.eng.Snapshot() {
@@ -104,8 +122,11 @@ func (m model) sourcesView(b *strings.Builder, w int) {
 			}
 		}
 		count := fmt.Sprintf("%d/%d", s.Done, s.Total)
-		if s.Done+s.Unavailable == s.Total {
+		if s.Done+s.Unavailable+s.Removed == s.Total {
 			count = ok.Render(count)
+		}
+		if s.Removed > 0 {
+			count += dim.Render(fmt.Sprintf(" · %d removed", s.Removed))
 		}
 		if s.Unavailable > 0 {
 			count += dim.Render(fmt.Sprintf(" · %d unavail.", s.Unavailable))

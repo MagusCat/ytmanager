@@ -26,7 +26,7 @@ func (m model) helpLines(help string) []string {
 		help = "enter confirm · esc cancel"
 	}
 	w := max(1, m.terminalWidth()-2)
-	lines := strings.Split(ansi.Wrap(help, w, ""), "\n")
+	lines := strings.Split(ansi.Wrap(styleHelp(help), w, ""), "\n")
 	if len(lines) > 2 {
 		lines = lines[:2]
 		lines[1] = ansi.Truncate(lines[1], max(1, w-1), "") + "…"

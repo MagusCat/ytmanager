@@ -11,6 +11,7 @@ import (
 	"ytmanager/internal/device"
 	"ytmanager/internal/manifest"
 	"ytmanager/internal/ytdlp"
+	"ytmanager/internal/ytmusic"
 )
 
 type Options struct {
@@ -50,8 +51,8 @@ type Event struct {
 }
 
 type SourceView struct {
-	ID, Type, Title, URL, Creator string
-	Done, Total, Unavailable      int
+	ID, Type, Title, URL, Creator     string
+	Done, Total, Unavailable, Removed int
 }
 
 // MissingView is an unavailable track plus the first source it appears in.
@@ -67,12 +68,13 @@ type Engine struct {
 	gate *gate
 
 	// set while a download or sync runs; Add persists requests and wakes the scheduler
-	running    bool
-	accepting  bool
-	more       chan struct{}
-	spaceCheck func(string, uint64) error                                    // nil uses live storage checks
-	listSource func(context.Context, string, string) (*ytdlp.Listing, error) // nil uses yt-dlp
-	trackWork  func(context.Context, string, func(Event)) bool               // nil downloads normally
+	running     bool
+	accepting   bool
+	more        chan struct{}
+	spaceCheck  func(string, uint64) error                                    // nil uses live storage checks
+	listSource  func(context.Context, string, string) (*ytdlp.Listing, error) // nil uses yt-dlp
+	trackWork   func(context.Context, string, func(Event)) bool               // nil downloads normally
+	resolveSong func(context.Context, string) (string, error)                 // nil uses YouTube Music
 }
 
 // Open loads (or creates) the destination at root, which may be ~/… or an mtp:// URI.
@@ -119,6 +121,11 @@ func (e *Engine) Snapshot() []SourceView {
 		d, t, u := e.m.Count(s)
 		out[i] = SourceView{ID: s.ID, Type: s.Type, Title: s.Title, URL: s.URL, Creator: s.Creator,
 			Done: d, Total: t, Unavailable: u}
+		for _, id := range s.Tracks {
+			if track := e.m.Tracks[id]; track != nil && track.Status == manifest.StatusRemoved {
+				out[i].Removed++
+			}
+		}
 	}
 	return out
 }
@@ -131,7 +138,7 @@ func (e *Engine) Missing() []MissingView {
 	var out []MissingView
 	for _, s := range e.m.Sources {
 		for _, id := range s.Tracks {
-			if t := e.m.Tracks[id]; t.Status == manifest.StatusUnavailable && !seen[id] {
+			if t := e.m.Tracks[id]; (t.Status == manifest.StatusUnavailable || (t.Status == manifest.StatusFailed && t.Error == ytmusic.ErrNoSong.Error())) && !seen[id] {
 				seen[id] = true
 				out = append(out, MissingView{id, t.Title, s.Title, s.URL, t.Alt, t.Error})
 			}

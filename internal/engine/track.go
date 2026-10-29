@@ -12,6 +12,7 @@ import (
 	"ytmanager/internal/lyrics"
 	"ytmanager/internal/manifest"
 	"ytmanager/internal/ytdlp"
+	"ytmanager/internal/ytmusic"
 )
 
 // track downloads one track and records the result; it returns false if ctx stopped it midway.
@@ -20,6 +21,7 @@ func (e *Engine) track(ctx context.Context, id string, emit func(Event)) bool {
 	t := e.m.Tracks[id]
 	title, root, format := t.Title, e.m.Root, e.m.Format
 	dl := id // an alternative is a different video, but it keeps id's slot (album, number, playlist)
+	explicitAlternative := t.Alt != ""
 	if t.Alt != "" {
 		dl = t.Alt
 	}
@@ -29,7 +31,22 @@ func (e *Engine) track(ctx context.Context, id string, emit func(Event)) bool {
 	emit(Event{Kind: EvStart, ID: id, Title: title})
 	var path, lyr string
 	var err error
-	for attempt := 0; attempt < 2; attempt++ {
+	if !explicitAlternative {
+		emit(Event{Kind: EvLog, ID: id, Msg: "Checking YouTube Music audio: " + title})
+		resolve := e.resolveSong
+		if resolve == nil {
+			resolve = ytmusic.Song
+		}
+		dl, err = resolve(ctx, id)
+		if err == nil && dl == "" {
+			err = ytmusic.ErrNoSong
+		}
+		if err == nil && dl != id {
+			emit(Event{Kind: EvLog, ID: id, Msg: "Using YouTube Music audio: " + title + " (" + dl + ")"})
+		}
+	}
+	resolutionOK := err == nil
+	for attempt := 0; resolutionOK && attempt < 2; attempt++ {
 		path, lyr, err = e.download(ctx, dl, album, n, format, root, func(p float64) {
 			emit(Event{Kind: EvProgress, ID: id, Title: title, Pct: p})
 		})

@@ -48,14 +48,19 @@ func (m model) devicesKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) devicesView(b *strings.Builder, w int) {
-	header(b, dim.Render("choose a destination"))
+	if m.splashFits(w) {
+		b.WriteString(m.splash(w))
+	} else {
+		header(b, dim.Render("where should your music go?"))
+		b.WriteString(steps(1))
+	}
 	pw := max(20, w-20)
 	var rows []string
 	for i, mt := range m.mounts {
 		row := fmt.Sprintf("%-*s %s", pw, cutLeft(device.Label(mt.Path), pw), dim.Render(engine.Human(mt.Free)+" free"))
 		rows = append(rows, pick(i == m.cursor, row))
 	}
-	rows = append(rows, pick(m.cursor == len(m.mounts), "Other path…"))
+	rows = append(rows, pick(m.cursor == len(m.mounts), "Other path… "+dim.Render("type or paste any folder")))
 	activity := ""
 	if m.lost != nil && m.terminalHeight() >= 24 {
 		activity = "\n" + m.catView(w) + "\n"
@@ -141,6 +146,7 @@ func (m model) browseKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m model) browseView(b *strings.Builder, w int) {
 	header(b, cutLeft(device.Label(m.browse), max(20, w-12)))
+	b.WriteString(steps(2))
 	rows := []string{pick(m.cursor == 0, hi.Render("Use this folder")), pick(m.cursor == 1, dim.Render(".. up"))}
 	for i, d := range m.dirs {
 		rows = append(rows, pick(m.cursor == i+2, cut(d, w-6)+"/"))

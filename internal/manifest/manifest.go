@@ -5,6 +5,7 @@ package manifest
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -13,6 +14,7 @@ const FileName = "data.music"
 const (
 	StatusPending     = "pending"
 	StatusDone        = "done"
+	StatusRemoved     = "removed"     // intentionally deleted; never automatically downloaded again
 	StatusFailed      = "failed"      // retried on the next sync
 	StatusUnavailable = "unavailable" // skipped until it gets an alternative
 )
@@ -126,11 +128,12 @@ func (m *Manifest) Pending(sourceIDs []string) []string {
 			}
 			seen[id] = true
 			t := m.Tracks[id]
-			if t.Status == StatusUnavailable {
+			if t.Status == StatusUnavailable || t.Status == StatusRemoved {
 				continue
 			}
 			if t.Status == StatusDone {
-				if _, err := os.Stat(filepath.Join(m.Root, t.Path)); err == nil {
+				if actual := existingAudioPath(m.Root, t.Path); actual != "" {
+					t.Path = actual
 					continue
 				}
 				t.Status = StatusPending
@@ -166,4 +169,40 @@ func (m *Manifest) Count(s *Source) (done, total, unavailable int) {
 		}
 	}
 	return done, len(s.Tracks), unavailable
+}
+
+// existingAudioPath resolves unique case-only variants returned by MTP.
+func existingAudioPath(root, rel string) string {
+	if rel == "" || filepath.IsAbs(rel) {
+		return ""
+	}
+	current := root
+	for _, part := range strings.Split(filepath.Clean(rel), string(filepath.Separator)) {
+		if part == ".." {
+			return ""
+		}
+		entries, err := os.ReadDir(current)
+		if err != nil {
+			return ""
+		}
+		match := ""
+		for _, entry := range entries {
+			if strings.EqualFold(part, entry.Name()) {
+				if match != "" {
+					return ""
+				}
+				match = entry.Name()
+			}
+		}
+		if match == "" {
+			return ""
+		}
+		current = filepath.Join(current, match)
+	}
+	stat, err := os.Stat(current)
+	if err != nil || !stat.Mode().IsRegular() || stat.Size() == 0 {
+		return ""
+	}
+	actual, _ := filepath.Rel(root, current)
+	return actual
 }
