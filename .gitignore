@@ -1,2 +1,4 @@
 /ytmanager
 /ytmanager.exe
+*.test
+*.out
